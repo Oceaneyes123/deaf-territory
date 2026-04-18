@@ -1,8 +1,9 @@
-import { NextResponse } from 'next/server';
-import { makePlaceholderPayload } from '@/lib/api-placeholder';
+import { NextResponse } from "next/server";
+
+import { ILOILO_MUNICIPALITIES } from "../_data/iloilo";
 
 export async function GET() {
-  return NextResponse.json(makePlaceholderPayload('/api/municipalities', 'Municipality list endpoint placeholder.'), {
-    status: 501,
+  return NextResponse.json({
+    data: ILOILO_MUNICIPALITIES.map(({ psgcCode, name, type }) => ({ psgcCode, name, type })),
   });
 }
