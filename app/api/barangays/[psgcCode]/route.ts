@@ -9,7 +9,7 @@ type RouteParams = {
 };
 
 type RouteContext = {
-  params: Promise<RouteParams> | RouteParams;
+  params: Promise<RouteParams>;
 };
 
 export async function GET(_request: Request, context: RouteContext) {
