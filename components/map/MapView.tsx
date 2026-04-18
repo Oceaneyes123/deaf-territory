@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { MapContainer, TileLayer, useMap } from "react-leaflet";
-import type { FeatureCollection, GeoJsonObject } from "geojson";
+import type { FeatureCollection, Geometry, GeoJsonObject } from "geojson";
 import { usePathname } from "next/navigation";
 import MunicipalityLayer from "./MunicipalityLayer";
 import BarangayLayer from "./BarangayLayer";
@@ -20,7 +20,7 @@ export type BoundaryFeatureProperties = {
   [key: string]: unknown;
 };
 
-export type BoundaryFeatureCollection = FeatureCollection<GeoJsonObject, BoundaryFeatureProperties>;
+export type BoundaryFeatureCollection = FeatureCollection<Geometry, BoundaryFeatureProperties>;
 
 type MapViewProps = {
   municipalitySource: string;
