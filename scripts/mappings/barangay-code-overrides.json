@@ -1,0 +1,10 @@
+{
+  "code:064503001": {
+    "psgcCode": "064503001",
+    "notes": "Sample direct-code override when source boundaries provide stale metadata."
+  },
+  "name:Bo. Obrero|city:Iloilo City": {
+    "psgcCode": "064502019",
+    "notes": "Known mismatch between legacy short name and PSGC canonical barangay entry."
+  }
+}
