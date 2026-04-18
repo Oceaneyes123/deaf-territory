@@ -2,6 +2,7 @@ import type { PolygonGeometry, Position } from "../_data/iloilo";
 
 const MAX_RING_POINTS = 200;
 const MAX_SERIALIZED_BYTES = 50_000;
+const textEncoder = new TextEncoder();
 
 function thinRing(ring: Position[], maxPoints: number): Position[] {
   if (ring.length <= maxPoints) {
@@ -20,6 +21,10 @@ function thinRing(ring: Position[], maxPoints: number): Position[] {
   return reduced;
 }
 
+function getSerializedSize(value: unknown): number {
+  return textEncoder.encode(JSON.stringify(value)).length;
+}
+
 export function simplifyGeometry(geometry: PolygonGeometry): PolygonGeometry {
   return {
     type: "Polygon",
@@ -28,8 +33,7 @@ export function simplifyGeometry(geometry: PolygonGeometry): PolygonGeometry {
 }
 
 export function enforceGeometrySizeLimit(geometry: PolygonGeometry): PolygonGeometry | null {
-  const serialized = JSON.stringify(geometry);
-  if (serialized.length <= MAX_SERIALIZED_BYTES) {
+  if (getSerializedSize(geometry) <= MAX_SERIALIZED_BYTES) {
     return geometry;
   }
 
@@ -38,7 +42,7 @@ export function enforceGeometrySizeLimit(geometry: PolygonGeometry): PolygonGeom
     coordinates: geometry.coordinates.map((ring) => thinRing(ring, Math.floor(MAX_RING_POINTS / 4))),
   };
 
-  if (JSON.stringify(reduced).length > MAX_SERIALIZED_BYTES) {
+  if (getSerializedSize(reduced) > MAX_SERIALIZED_BYTES) {
     return null;
   }
 

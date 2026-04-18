@@ -1,15 +1,15 @@
 import { NextResponse } from "next/server";
 
 import { ILOILO_BARANGAYS, ILOILO_MUNICIPALITIES } from "../../_data/iloilo";
-import { validatePsgcCode } from "../../_lib/validation";
+import { validateMunicipalityPsgcCode } from "../../_lib/validation";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const psgcCode = validatePsgcCode(searchParams.get("psgcCode"));
+  const psgcCode = validateMunicipalityPsgcCode(searchParams.get("psgcCode"));
 
   if (!psgcCode) {
     return NextResponse.json(
-      { error: "Invalid or missing `psgcCode` query parameter." },
+      { error: "Invalid or missing `psgcCode` query parameter. Expected a 9-digit municipality PSGC code." },
       { status: 400 },
     );
   }

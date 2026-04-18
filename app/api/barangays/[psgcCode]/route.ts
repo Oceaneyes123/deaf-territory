@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { ILOILO_BARANGAYS } from "../../_data/iloilo";
 import { enforceGeometrySizeLimit, simplifyGeometry } from "../../_lib/geometry";
-import { validatePsgcCode } from "../../_lib/validation";
+import { validateBarangayPsgcCode } from "../../_lib/validation";
 
 type RouteContext = {
   params: {
@@ -11,10 +11,10 @@ type RouteContext = {
 };
 
 export async function GET(_request: Request, context: RouteContext) {
-  const psgcCode = validatePsgcCode(context.params.psgcCode);
+  const psgcCode = validateBarangayPsgcCode(context.params.psgcCode);
 
   if (!psgcCode) {
-    return NextResponse.json({ error: "Invalid or missing `psgcCode`." }, { status: 400 });
+    return NextResponse.json({ error: "Invalid or missing `psgcCode`. Expected a 10-digit barangay PSGC code." }, { status: 400 });
   }
 
   const barangay = ILOILO_BARANGAYS.find((entry) => entry.psgcCode === psgcCode);
