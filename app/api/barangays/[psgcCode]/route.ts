@@ -4,17 +4,23 @@ import { ILOILO_BARANGAYS } from "../../_data/iloilo";
 import { enforceGeometrySizeLimit, simplifyGeometry } from "../../_lib/geometry";
 import { validateBarangayPsgcCode } from "../../_lib/validation";
 
+type RouteParams = {
+  psgcCode: string;
+};
+
 type RouteContext = {
-  params: {
-    psgcCode: string;
-  };
+  params: Promise<RouteParams>;
 };
 
 export async function GET(_request: Request, context: RouteContext) {
-  const psgcCode = validateBarangayPsgcCode(context.params.psgcCode);
+  const { psgcCode: rawPsgcCode } = await context.params;
+  const psgcCode = validateBarangayPsgcCode(rawPsgcCode);
 
   if (!psgcCode) {
-    return NextResponse.json({ error: "Invalid or missing `psgcCode`. Expected a 10-digit barangay PSGC code." }, { status: 400 });
+    return NextResponse.json(
+      { error: "Invalid or missing `psgcCode`. Expected a 10-digit barangay PSGC code." },
+      { status: 400 },
+    );
   }
 
   const barangay = ILOILO_BARANGAYS.find((entry) => entry.psgcCode === psgcCode);
