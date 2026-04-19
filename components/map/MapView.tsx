@@ -11,11 +11,7 @@ import SearchBox from "../sidebar/SearchBox";
 
 const MapCanvas = dynamic(() => import("./MapCanvas"), {
   ssr: false,
-  loading: () => (
-    <div className="min-h-[52vh] rounded-[32px] border border-stone-200 bg-[#eadcc6] px-6 py-10 text-sm text-stone-600">
-      Loading interactive map…
-    </div>
-  ),
+  loading: () => <div className="min-h-[52vh] rounded-[32px] border border-stone-200 bg-[#eadcc6]" />,
 });
 
 type MapViewProps = {
@@ -24,6 +20,11 @@ type MapViewProps = {
 
 type DataResponse<T> = {
   data: T;
+};
+
+type BootstrapPayload = {
+  municipalities: MunicipalitySummary[];
+  municipalityGeometry: BoundaryFeatureCollection;
 };
 
 const EMPTY_COLLECTION: BoundaryFeatureCollection = { type: "FeatureCollection", features: [] };
@@ -83,6 +84,8 @@ export default function MapView({ initialBarangayCode }: MapViewProps) {
   const [isMunicipalityLoading, setIsMunicipalityLoading] = useState(false);
   const [isBarangayLoading, setIsBarangayLoading] = useState(false);
   const selectionRequestRef = useRef(0);
+  const barangayGeometryCacheRef = useRef(new Map<string, BoundaryFeatureCollection>());
+  const barangayDetailCacheRef = useRef(new Map<string, BarangayDetail>());
 
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const debouncedSearchQuery = useDebouncedValue(deferredSearchQuery.trim(), 250);
@@ -92,7 +95,17 @@ export default function MapView({ initialBarangayCode }: MapViewProps) {
       return barangayGeometry;
     }
 
+    const cachedGeometry = barangayGeometryCacheRef.current.get(psgcCode);
+    if (cachedGeometry) {
+      startTransition(() => {
+        setBarangayGeometry(cachedGeometry);
+        setLoadedMunicipalityCode(psgcCode);
+      });
+      return cachedGeometry;
+    }
+
     const geometry = await fetchJson<BoundaryFeatureCollection>(`/api/barangays?municipality=${psgcCode}`);
+    barangayGeometryCacheRef.current.set(psgcCode, geometry);
     startTransition(() => {
       setBarangayGeometry(geometry);
       setLoadedMunicipalityCode(psgcCode);
@@ -106,20 +119,28 @@ export default function MapView({ initialBarangayCode }: MapViewProps) {
     setIsBarangayLoading(true);
 
     try {
-      const response = await fetchJson<DataResponse<BarangayDetail>>(`/api/barangays/${psgcCode}`);
+      const cachedDetail = barangayDetailCacheRef.current.get(psgcCode);
+      const detail = cachedDetail
+        ? cachedDetail
+        : (await fetchJson<DataResponse<BarangayDetail>>(`/api/barangays/${psgcCode}`)).data;
+
+      if (!cachedDetail) {
+        barangayDetailCacheRef.current.set(psgcCode, detail);
+      }
+
       if (requestId !== selectionRequestRef.current) {
         return;
       }
 
-      await ensureMunicipalityBarangays(response.data.municipalityPsgcCode);
+      await ensureMunicipalityBarangays(detail.municipalityPsgcCode);
       if (requestId !== selectionRequestRef.current) {
         return;
       }
 
       startTransition(() => {
-        setSelectedMunicipalityCode(response.data.municipalityPsgcCode);
-        setSelectedBarangayCode(response.data.psgcCode);
-        setSelectedBarangay(response.data);
+        setSelectedMunicipalityCode(detail.municipalityPsgcCode);
+        setSelectedBarangayCode(detail.psgcCode);
+        setSelectedBarangay(detail);
       });
     } catch (error) {
       if (requestId !== selectionRequestRef.current) {
@@ -172,14 +193,11 @@ export default function MapView({ initialBarangayCode }: MapViewProps) {
       setBootError(null);
 
       try {
-        const [municipalityResponse, geometryResponse] = await Promise.all([
-          fetchJson<DataResponse<MunicipalitySummary[]>>("/api/municipalities", controller.signal),
-          fetchJson<BoundaryFeatureCollection>("/api/municipalities/geometry", controller.signal),
-        ]);
+        const response = await fetchJson<DataResponse<BootstrapPayload>>("/api/bootstrap", controller.signal);
 
         startTransition(() => {
-          setMunicipalities(municipalityResponse.data);
-          setMunicipalityGeometry(geometryResponse);
+          setMunicipalities(response.data.municipalities);
+          setMunicipalityGeometry(response.data.municipalityGeometry);
         });
       } catch (error) {
         if (!controller.signal.aborted) {
@@ -310,14 +328,7 @@ export default function MapView({ initialBarangayCode }: MapViewProps) {
           <div className="inline-flex rounded-full border border-stone-300 bg-white/75 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.28em] text-stone-500 backdrop-blur">
             Deaf Territory
           </div>
-          <div className="space-y-3">
-            <h1 className="max-w-sm text-4xl font-semibold leading-tight text-stone-950">
-              Search Iloilo barangays and inspect live administrative boundaries.
-            </h1>
-            <p className="max-w-sm text-sm leading-6 text-stone-600">
-              Municipality geometry loads first. Barangay polygons stay scoped to the selected municipality or deep link so the map remains responsive.
-            </p>
-          </div>
+          <h1 className="max-w-sm text-4xl font-semibold leading-tight text-stone-950">Iloilo</h1>
         </div>
 
         <div className="space-y-4 rounded-[28px] border border-stone-200 bg-white/80 p-5 shadow-[0_18px_40px_rgba(41,37,36,0.08)] backdrop-blur">
@@ -327,7 +338,7 @@ export default function MapView({ initialBarangayCode }: MapViewProps) {
               setSelectionError(null);
               setSearchQuery(value);
             }}
-            placeholder="Type a barangay name or PSGC code"
+            placeholder="Search"
           />
           <MunicipalitySelect
             municipalities={municipalityOptions}
@@ -354,11 +365,8 @@ export default function MapView({ initialBarangayCode }: MapViewProps) {
                 });
               }}
             >
-              Reset map
+              Reset
             </button>
-            <div className="rounded-full bg-stone-950 px-4 py-2 text-sm text-white">
-              {selectedMunicipalityCode ? "Scoped municipality view" : "Iloilo overview"}
-            </div>
           </div>
         </div>
 
@@ -372,16 +380,10 @@ export default function MapView({ initialBarangayCode }: MapViewProps) {
         ) : null}
 
         <ResultsList
-          title={debouncedSearchQuery.length >= 2 ? "Search Results" : "Municipality Barangays"}
+          title={debouncedSearchQuery.length >= 2 ? "Results" : "Barangays"}
           items={listItems}
           selectedCode={selectedBarangayCode}
-          emptyMessage={
-            debouncedSearchQuery.length >= 2
-              ? "No barangays match that query in the current Iloilo dataset."
-              : selectedMunicipalityCode
-                ? "This municipality has no loaded barangays yet."
-                : "Pick a municipality or search for a barangay to load polygon results."
-          }
+          emptyMessage={debouncedSearchQuery.length >= 2 || selectedMunicipalityCode ? "No results." : ""}
           onSelect={(psgcCode) => {
             void selectBarangay(psgcCode);
           }}
@@ -391,21 +393,14 @@ export default function MapView({ initialBarangayCode }: MapViewProps) {
       </aside>
 
       <section className="flex min-h-screen flex-col px-5 py-6 md:px-6">
-        <div className="mb-4 flex items-center justify-between gap-4 rounded-[28px] border border-stone-200 bg-white/70 px-5 py-4 shadow-[0_18px_40px_rgba(41,37,36,0.06)] backdrop-blur">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-stone-500">Current Focus</p>
-            <p className="mt-1 text-lg font-medium text-stone-900">
-              {selectedBarangay
-                ? selectedBarangay.displayName
-                : selectedMunicipalityFeature
-                  ? `${selectedMunicipalityFeature.properties.name}, Iloilo`
-                  : "Iloilo Province overview"}
-            </p>
-          </div>
-          <div className="text-right text-sm text-stone-500">
-            <div>{isBootLoading ? "Loading base layers…" : "Base layer ready"}</div>
-            <div>{isMunicipalityLoading ? "Loading scoped barangays…" : "Barangays load on demand"}</div>
-          </div>
+        <div className="mb-4 rounded-[28px] border border-stone-200 bg-white/70 px-5 py-4 shadow-[0_18px_40px_rgba(41,37,36,0.06)] backdrop-blur">
+          <p className="text-lg font-medium text-stone-900">
+            {selectedBarangay
+              ? selectedBarangay.displayName
+              : selectedMunicipalityFeature
+                ? `${selectedMunicipalityFeature.properties.name}, Iloilo`
+                : "Iloilo"}
+          </p>
         </div>
 
         <MapCanvas

@@ -8,8 +8,8 @@ type SearchBoxProps = {
 
 export default function SearchBox({ value, onChange, placeholder = "Search" }: SearchBoxProps) {
   return (
-    <label className="space-y-2">
-      <span className="text-xs font-semibold uppercase tracking-[0.24em] text-stone-500">Barangay Search</span>
+    <label className="block">
+      <span className="sr-only">Search</span>
       <input
         type="search"
         value={value}

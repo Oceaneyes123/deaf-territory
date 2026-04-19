@@ -1,6 +1,7 @@
 import type { Geometry } from "geojson";
 
 import { getPool } from "./db";
+import { getCachedValue } from "./server-cache";
 import type {
   BarangayDetail,
   BoundaryFeatureCollection,
@@ -38,6 +39,7 @@ const GEOGRAPHIC_SRID = 4326;
 const MUNICIPALITY_OVERVIEW_TOLERANCE = 0.0005;
 const GEOJSON_OVERVIEW_DECIMALS = 5;
 const GEOJSON_DETAIL_DECIMALS = 6;
+const TERRITORY_CACHE_TTL_MS = 5 * 60 * 1000;
 
 function normalizeGeometrySql(column: string): string {
   return `
@@ -60,7 +62,7 @@ const NORMALIZED_BARANGAY_SIMPLIFIED_GEOM_SQL = normalizeGeometrySql("geom_simpl
 const NORMALIZED_BARANGAY_CENTROID_SQL = normalizeGeometrySql("centroid");
 const NORMALIZED_BARANGAY_BBOX_SQL = normalizeGeometrySql("bbox");
 
-export async function listMunicipalities(): Promise<MunicipalitySummary[]> {
+async function queryMunicipalities(): Promise<MunicipalitySummary[]> {
   const pool = getPool();
   const { rows } = await pool.query<MunicipalitySummary>(`
     SELECT
@@ -74,7 +76,7 @@ export async function listMunicipalities(): Promise<MunicipalitySummary[]> {
   return rows;
 }
 
-export async function getMunicipalityGeometry(): Promise<BoundaryFeatureCollection> {
+async function queryMunicipalityGeometry(): Promise<BoundaryFeatureCollection> {
   const pool = getPool();
   const { rows } = await pool.query<JsonRow<BoundaryFeatureCollection>>(`
     WITH municipality_geometry AS (
@@ -151,7 +153,7 @@ export async function searchBarangays(query: string): Promise<SearchResult[]> {
   return rows.map(({ exact_rank: _exactRank, starts_rank: _startsRank, partial_rank: _partialRank, display_rank: _displayRank, ...row }) => row);
 }
 
-export async function listBarangaysByMunicipality(psgcCode: string): Promise<BoundaryFeatureCollection> {
+async function queryBarangaysByMunicipality(psgcCode: string): Promise<BoundaryFeatureCollection> {
   const pool = getPool();
   const { rows } = await pool.query<JsonRow<BoundaryFeatureCollection>>(
     `
@@ -199,7 +201,7 @@ export async function listBarangaysByMunicipality(psgcCode: string): Promise<Bou
   return rows[0]?.geojson ?? { type: "FeatureCollection", features: [] };
 }
 
-export async function getBarangayDetail(psgcCode: string): Promise<BarangayDetail | null> {
+async function queryBarangayDetail(psgcCode: string): Promise<BarangayDetail | null> {
   const pool = getPool();
   const { rows } = await pool.query<BarangayDetailRow>(
     `
@@ -243,4 +245,33 @@ export async function getBarangayDetail(psgcCode: string): Promise<BarangayDetai
   );
 
   return rows[0] ?? null;
+}
+
+export async function listMunicipalities(): Promise<MunicipalitySummary[]> {
+  return getCachedValue("territory:municipalities", TERRITORY_CACHE_TTL_MS, queryMunicipalities);
+}
+
+export async function hasMunicipality(psgcCode: string): Promise<boolean> {
+  const municipalities = await listMunicipalities();
+  return municipalities.some((entry) => entry.psgcCode === psgcCode);
+}
+
+export async function getMunicipalityGeometry(): Promise<BoundaryFeatureCollection> {
+  return getCachedValue("territory:municipality-geometry", TERRITORY_CACHE_TTL_MS, queryMunicipalityGeometry);
+}
+
+export async function listBarangaysByMunicipality(psgcCode: string): Promise<BoundaryFeatureCollection> {
+  return getCachedValue(
+    `territory:barangays-by-municipality:${psgcCode}`,
+    TERRITORY_CACHE_TTL_MS,
+    () => queryBarangaysByMunicipality(psgcCode),
+  );
+}
+
+export async function getBarangayDetail(psgcCode: string): Promise<BarangayDetail | null> {
+  return getCachedValue(
+    `territory:barangay-detail:${psgcCode}`,
+    TERRITORY_CACHE_TTL_MS,
+    () => queryBarangayDetail(psgcCode),
+  );
 }

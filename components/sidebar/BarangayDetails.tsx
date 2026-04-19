@@ -21,25 +21,18 @@ export default function BarangayDetails({ barangay, loading = false }: BarangayD
   if (loading) {
     return (
       <section className="rounded-[28px] border border-stone-200 bg-white/90 p-5 shadow-[0_18px_40px_rgba(41,37,36,0.08)]">
-        <p className="text-sm text-stone-500">Loading barangay details…</p>
+        <p className="text-sm text-stone-500">Loading…</p>
       </section>
     );
   }
 
   if (!barangay) {
-    return (
-      <section className="rounded-[28px] border border-stone-200 bg-white/90 p-5 shadow-[0_18px_40px_rgba(41,37,36,0.08)]">
-        <p className="text-sm text-stone-500">
-          Select a barangay from search results or click a boundary on the map to inspect its details.
-        </p>
-      </section>
-    );
+    return null;
   }
 
   return (
     <section className="rounded-[28px] border border-stone-200 bg-white/95 p-5 shadow-[0_18px_40px_rgba(41,37,36,0.08)]">
-      <p className="text-xs font-semibold uppercase tracking-[0.24em] text-stone-500">Selected Barangay</p>
-      <h2 className="mt-3 text-2xl font-semibold text-stone-950">{barangay.name}</h2>
+      <h2 className="text-2xl font-semibold text-stone-950">{barangay.name}</h2>
       <p className="mt-1 text-sm text-stone-500">{barangay.displayName}</p>
 
       <dl className="mt-5 grid gap-4 sm:grid-cols-2">
@@ -76,7 +69,7 @@ export default function BarangayDetails({ barangay, loading = false }: BarangayD
           href={`/barangay/${barangay.psgcCode}`}
           className="rounded-full bg-stone-950 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-800"
         >
-          Open shareable page
+          Page
         </Link>
         <a
           href={`https://www.openstreetmap.org/?mlat=${barangay.centroid[1]}&mlon=${barangay.centroid[0]}#map=15/${barangay.centroid[1]}/${barangay.centroid[0]}`}
@@ -84,7 +77,7 @@ export default function BarangayDetails({ barangay, loading = false }: BarangayD
           rel="noreferrer"
           className="rounded-full border border-stone-300 px-4 py-2 text-sm font-medium text-stone-700 transition hover:border-stone-400 hover:bg-stone-50"
         >
-          Open in OSM
+          OSM
         </a>
       </div>
     </section>

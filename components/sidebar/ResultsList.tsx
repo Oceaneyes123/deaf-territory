@@ -30,9 +30,11 @@ export default function ResultsList({
       </div>
 
       {items.length === 0 ? (
+        emptyMessage ? (
         <div className="rounded-2xl border border-dashed border-stone-300 bg-white/50 px-4 py-5 text-sm text-stone-500">
           {emptyMessage}
         </div>
+        ) : null
       ) : (
         <ul className="space-y-2 overflow-y-auto pr-1">
           {items.map((item) => {

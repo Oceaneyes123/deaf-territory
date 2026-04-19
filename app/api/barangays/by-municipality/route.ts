@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { enforcePayloadSizeLimit } from "../../_lib/geometry";
 import { errorJson, handleRouteError } from "../../_lib/responses";
 import { validateMunicipalityPsgcCode } from "../../_lib/validation";
-import { listBarangaysByMunicipality, listMunicipalities } from "@/lib/territory-data";
+import { hasMunicipality, listBarangaysByMunicipality } from "@/lib/territory-data";
 
 const CACHE_CONTROL = "public, max-age=300, s-maxage=3600, stale-while-revalidate=86400";
 const MAX_BYTES = 2_000_000;
@@ -20,9 +20,7 @@ export async function GET(request: Request) {
       );
     }
 
-    const municipalities = await listMunicipalities();
-    const municipality = municipalities.find((entry) => entry.psgcCode === psgcCode);
-    if (!municipality) {
+    if (!(await hasMunicipality(psgcCode))) {
       return errorJson("Municipality not found.", 404);
     }
 

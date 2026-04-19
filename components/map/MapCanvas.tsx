@@ -328,12 +328,6 @@ export default function MapCanvas({
 
   return (
     <div className="relative min-h-[52vh] overflow-hidden rounded-[32px] border border-stone-200 bg-[#eadcc6] shadow-[0_24px_60px_rgba(28,25,23,0.14)]">
-      <div className="absolute inset-x-0 top-0 z-10 flex items-center justify-between border-b border-stone-900/10 bg-white/75 px-5 py-3 backdrop-blur">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.26em] text-stone-500">Iloilo Territory Map</p>
-          <p className="text-sm text-stone-700">Municipality overview first, barangays loaded on demand.</p>
-        </div>
-      </div>
       <div ref={containerRef} className="h-[calc(100vh-8rem)] min-h-[52vh] w-full" />
     </div>
   );
