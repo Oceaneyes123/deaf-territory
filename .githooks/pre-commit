@@ -1,0 +1,23 @@
+#!/bin/sh
+
+limit_bytes=$((55 * 1024 * 1024))
+failed=0
+tmp_file=$(mktemp) || exit 1
+trap 'rm -f "$tmp_file"' EXIT
+
+git diff --cached --name-only --diff-filter=AM -z > "$tmp_file"
+
+while IFS= read -r -d '' path
+do
+  size=$(git cat-file -s ":$path" 2>/dev/null || echo 0)
+  if [ "$size" -gt "$limit_bytes" ]; then
+    size_mb=$(awk "BEGIN { printf \"%.2f\", $size / 1048576 }")
+    echo "Blocked: staged file exceeds 55 MB: $path (${size_mb} MB)" >&2
+    failed=1
+  fi
+done < "$tmp_file"
+
+if [ "$failed" -ne 0 ]; then
+  echo "Remove the file from git or store it outside the repository." >&2
+  exit 1
+fi

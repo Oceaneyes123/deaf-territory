@@ -29,3 +29,7 @@ pnpm-debug.log*
 next-env.d.ts
 
 CRED.md
+
+# local large assets
+/tmp-ph-adm4*.zip
+/data/source/ph-adm4/*.shp.shp
