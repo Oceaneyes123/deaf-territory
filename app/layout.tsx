@@ -1,15 +1,27 @@
-import type { Metadata } from 'next';
-import './globals.css';
+import type { Metadata } from "next";
+import { Fraunces, Manrope } from "next/font/google";
+
+import "./globals.css";
+
+const displayFont = Fraunces({
+  subsets: ["latin"],
+  variable: "--font-display",
+});
+
+const bodyFont = Manrope({
+  subsets: ["latin"],
+  variable: "--font-body",
+});
 
 export const metadata: Metadata = {
-  title: 'Deaf Territory',
-  description: 'Accessible map and barangay lookup shell',
+  title: "Deaf Territory",
+  description: "Search Iloilo barangays, view administrative boundaries, and inspect PSGC-linked details.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body className={`${displayFont.variable} ${bodyFont.variable}`}>{children}</body>
     </html>
   );
 }

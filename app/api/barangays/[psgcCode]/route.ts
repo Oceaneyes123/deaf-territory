@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 
-import { ILOILO_BARANGAYS } from "../../_data/iloilo";
-import { enforceGeometrySizeLimit, simplifyGeometry } from "../../_lib/geometry";
+import { enforcePayloadSizeLimit } from "../../_lib/geometry";
+import { errorJson, handleRouteError } from "../../_lib/responses";
 import { validateBarangayPsgcCode } from "../../_lib/validation";
+import { getBarangayDetail } from "@/lib/territory-data";
 
 type RouteParams = {
   psgcCode: string;
@@ -12,39 +13,37 @@ type RouteContext = {
   params: Promise<RouteParams>;
 };
 
+const CACHE_CONTROL = "public, max-age=300, s-maxage=3600, stale-while-revalidate=86400";
+const MAX_BYTES = 500_000;
+
 export async function GET(_request: Request, context: RouteContext) {
-  const { psgcCode: rawPsgcCode } = await context.params;
-  const psgcCode = validateBarangayPsgcCode(rawPsgcCode);
+  try {
+    const { psgcCode: rawPsgcCode } = await context.params;
+    const psgcCode = validateBarangayPsgcCode(rawPsgcCode);
 
-  if (!psgcCode) {
+    if (!psgcCode) {
+      return errorJson("Invalid or missing `psgcCode`. Expected a 10-digit barangay PSGC code.", 400);
+    }
+
+    const detail = await getBarangayDetail(psgcCode);
+    if (!detail) {
+      return errorJson("Barangay not found.", 404);
+    }
+
+    const safePayload = enforcePayloadSizeLimit(detail, MAX_BYTES);
+    if (!safePayload) {
+      return errorJson("Geometry for this barangay is too large to return safely.", 400);
+    }
+
     return NextResponse.json(
-      { error: "Invalid or missing `psgcCode`. Expected a 10-digit barangay PSGC code." },
-      { status: 400 },
+      { data: safePayload },
+      {
+        headers: {
+          "Cache-Control": CACHE_CONTROL,
+        },
+      },
     );
+  } catch (error) {
+    return handleRouteError(error);
   }
-
-  const barangay = ILOILO_BARANGAYS.find((entry) => entry.psgcCode === psgcCode);
-  if (!barangay) {
-    return NextResponse.json({ error: "Barangay not found." }, { status: 404 });
-  }
-
-  const simplified = simplifyGeometry(barangay.geometry);
-  const geometry = enforceGeometrySizeLimit(simplified);
-
-  if (!geometry) {
-    return NextResponse.json(
-      { error: "Geometry for this barangay is too large to return safely." },
-      { status: 400 },
-    );
-  }
-
-  return NextResponse.json({
-    data: {
-      psgcCode: barangay.psgcCode,
-      name: barangay.name,
-      municipalityPsgcCode: barangay.municipalityPsgcCode,
-      municipalityName: barangay.municipalityName,
-      geometry,
-    },
-  });
 }

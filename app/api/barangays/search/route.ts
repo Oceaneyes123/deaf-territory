@@ -1,64 +1,37 @@
 import { NextResponse } from "next/server";
 
-import { ILOILO_BARANGAYS } from "../../_data/iloilo";
+import { checkRateLimit, getRequestKey } from "../../_lib/rate-limit";
+import { errorJson, handleRouteError } from "../../_lib/responses";
 import { validateSearchQuery } from "../../_lib/validation";
+import { searchBarangays } from "@/lib/territory-data";
 
-const MAX_RESULTS = 10;
-
-type RankedBarangay = {
-  psgcCode: string;
-  name: string;
-  municipalityPsgcCode: string;
-  municipalityName: string;
-  rank: number;
-};
-
-function rankMatch(name: string, q: string): number {
-  const normalizedName = name.toLowerCase();
-  const normalizedQuery = q.toLowerCase();
-
-  if (normalizedName === normalizedQuery) {
-    return 0;
-  }
-
-  if (normalizedName.startsWith(normalizedQuery)) {
-    return 1;
-  }
-
-  if (normalizedName.includes(normalizedQuery)) {
-    return 2;
-  }
-
-  return Number.POSITIVE_INFINITY;
-}
+const SEARCH_LIMIT = 60;
+const SEARCH_WINDOW_MS = 60_000;
 
 export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const q = validateSearchQuery(searchParams.get("q"));
-
-  if (!q) {
-    return NextResponse.json(
-      { error: "Invalid query. `q` is required and must be at least 2 characters." },
-      { status: 400 },
-    );
+  const requestKey = getRequestKey(request);
+  if (!checkRateLimit(requestKey, SEARCH_LIMIT, SEARCH_WINDOW_MS)) {
+    return errorJson("Search rate limit exceeded. Try again shortly.", 429);
   }
 
-  const results: RankedBarangay[] = ILOILO_BARANGAYS.map((barangay) => ({
-    psgcCode: barangay.psgcCode,
-    name: barangay.name,
-    municipalityPsgcCode: barangay.municipalityPsgcCode,
-    municipalityName: barangay.municipalityName,
-    rank: rankMatch(barangay.name, q),
-  }))
-    .filter((item) => Number.isFinite(item.rank))
-    .sort((a, b) => {
-      if (a.rank !== b.rank) {
-        return a.rank - b.rank;
-      }
+  try {
+    const { searchParams } = new URL(request.url);
+    const q = validateSearchQuery(searchParams.get("q"));
 
-      return a.name.localeCompare(b.name);
-    })
-    .slice(0, MAX_RESULTS);
+    if (!q) {
+      return errorJson("Invalid query. `q` is required and must be between 2 and 80 characters.", 400);
+    }
 
-  return NextResponse.json({ data: results.map(({ rank: _rank, ...rest }) => rest) });
+    const data = await searchBarangays(q);
+    return NextResponse.json(
+      { data },
+      {
+        headers: {
+          "Cache-Control": "no-store",
+        },
+      },
+    );
+  } catch (error) {
+    return handleRouteError(error);
+  }
 }

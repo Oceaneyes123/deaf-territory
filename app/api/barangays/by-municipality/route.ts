@@ -1,29 +1,46 @@
 import { NextResponse } from "next/server";
 
-import { ILOILO_BARANGAYS, ILOILO_MUNICIPALITIES } from "../../_data/iloilo";
+import { enforcePayloadSizeLimit } from "../../_lib/geometry";
+import { errorJson, handleRouteError } from "../../_lib/responses";
 import { validateMunicipalityPsgcCode } from "../../_lib/validation";
+import { listBarangaysByMunicipality, listMunicipalities } from "@/lib/territory-data";
+
+const CACHE_CONTROL = "public, max-age=300, s-maxage=3600, stale-while-revalidate=86400";
+const MAX_BYTES = 2_000_000;
 
 export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const psgcCode = validateMunicipalityPsgcCode(searchParams.get("psgcCode"));
+  try {
+    const { searchParams } = new URL(request.url);
+    const psgcCode = validateMunicipalityPsgcCode(searchParams.get("psgcCode"));
 
-  if (!psgcCode) {
-    return NextResponse.json(
-      { error: "Invalid or missing `psgcCode` query parameter. Expected a 9-digit municipality PSGC code." },
-      { status: 400 },
-    );
+    if (!psgcCode) {
+      return errorJson(
+        "Invalid or missing `psgcCode` query parameter. Expected a 9-digit municipality PSGC code.",
+        400,
+      );
+    }
+
+    const municipalities = await listMunicipalities();
+    const municipality = municipalities.find((entry) => entry.psgcCode === psgcCode);
+    if (!municipality) {
+      return errorJson("Municipality not found.", 404);
+    }
+
+    const data = await listBarangaysByMunicipality(psgcCode);
+    const safePayload = enforcePayloadSizeLimit(data, MAX_BYTES);
+
+    if (!safePayload) {
+      return errorJson("Barangay geometry payload is too large to return safely.", 400);
+    }
+
+    return NextResponse.json(safePayload, {
+      headers: {
+        "Cache-Control": CACHE_CONTROL,
+        Deprecation: "true",
+        Link: "</api/barangays?municipality={psgcCode}>; rel=\"successor-version\"",
+      },
+    });
+  } catch (error) {
+    return handleRouteError(error);
   }
-
-  const municipality = ILOILO_MUNICIPALITIES.find((entry) => entry.psgcCode === psgcCode);
-  if (!municipality) {
-    return NextResponse.json({ error: "Municipality not found." }, { status: 404 });
-  }
-
-  const data = ILOILO_BARANGAYS.filter((barangay) => barangay.municipalityPsgcCode === psgcCode)
-    .map(({ psgcCode: barangayPsgcCode, name }) => ({ psgcCode: barangayPsgcCode, name }));
-
-  return NextResponse.json({
-    municipality: { psgcCode: municipality.psgcCode, name: municipality.name, type: municipality.type },
-    data,
-  });
 }

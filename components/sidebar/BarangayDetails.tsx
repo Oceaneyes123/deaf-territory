@@ -1,35 +1,92 @@
 "use client";
 
-type BarangaySummary = {
-  code: string;
-  name: string;
-  municipality?: string;
-};
+import Link from "next/link";
+
+import type { BarangayDetail } from "@/lib/territory-types";
 
 type BarangayDetailsProps = {
-  barangay: BarangaySummary | null;
+  barangay: BarangayDetail | null;
+  loading?: boolean;
 };
 
-export default function BarangayDetails({ barangay }: BarangayDetailsProps) {
+function formatNumber(value: number | null, digits: number): string {
+  if (value === null) {
+    return "Unavailable";
+  }
+
+  return value.toFixed(digits);
+}
+
+export default function BarangayDetails({ barangay, loading = false }: BarangayDetailsProps) {
+  if (loading) {
+    return (
+      <section className="rounded-[28px] border border-stone-200 bg-white/90 p-5 shadow-[0_18px_40px_rgba(41,37,36,0.08)]">
+        <p className="text-sm text-stone-500">Loading barangay details…</p>
+      </section>
+    );
+  }
+
   if (!barangay) {
-    return <section className="barangay-details">Select a barangay to view details.</section>;
+    return (
+      <section className="rounded-[28px] border border-stone-200 bg-white/90 p-5 shadow-[0_18px_40px_rgba(41,37,36,0.08)]">
+        <p className="text-sm text-stone-500">
+          Select a barangay from search results or click a boundary on the map to inspect its details.
+        </p>
+      </section>
+    );
   }
 
   return (
-    <section className="barangay-details" aria-live="polite">
-      <h2>{barangay.name}</h2>
-      <dl>
+    <section className="rounded-[28px] border border-stone-200 bg-white/95 p-5 shadow-[0_18px_40px_rgba(41,37,36,0.08)]">
+      <p className="text-xs font-semibold uppercase tracking-[0.24em] text-stone-500">Selected Barangay</p>
+      <h2 className="mt-3 text-2xl font-semibold text-stone-950">{barangay.name}</h2>
+      <p className="mt-1 text-sm text-stone-500">{barangay.displayName}</p>
+
+      <dl className="mt-5 grid gap-4 sm:grid-cols-2">
         <div>
-          <dt>PSGC code</dt>
-          <dd>{barangay.code}</dd>
+          <dt className="text-xs uppercase tracking-[0.18em] text-stone-400">PSGC Code</dt>
+          <dd className="mt-1 text-sm font-medium text-stone-900">{barangay.psgcCode}</dd>
         </div>
-        {barangay.municipality ? (
-          <div>
-            <dt>Municipality</dt>
-            <dd>{barangay.municipality}</dd>
-          </div>
-        ) : null}
+        <div>
+          <dt className="text-xs uppercase tracking-[0.18em] text-stone-400">Municipality / City</dt>
+          <dd className="mt-1 text-sm font-medium text-stone-900">{barangay.municipalityName}</dd>
+        </div>
+        <div>
+          <dt className="text-xs uppercase tracking-[0.18em] text-stone-400">Province</dt>
+          <dd className="mt-1 text-sm font-medium text-stone-900">{barangay.provinceName}</dd>
+        </div>
+        <div>
+          <dt className="text-xs uppercase tracking-[0.18em] text-stone-400">Region</dt>
+          <dd className="mt-1 text-sm font-medium text-stone-900">{barangay.regionName}</dd>
+        </div>
+        <div>
+          <dt className="text-xs uppercase tracking-[0.18em] text-stone-400">Area</dt>
+          <dd className="mt-1 text-sm font-medium text-stone-900">{formatNumber(barangay.areaSqKm, 2)} km²</dd>
+        </div>
+        <div>
+          <dt className="text-xs uppercase tracking-[0.18em] text-stone-400">Centroid</dt>
+          <dd className="mt-1 text-sm font-medium text-stone-900">
+            {formatNumber(barangay.centroid[1], 5)}, {formatNumber(barangay.centroid[0], 5)}
+          </dd>
+        </div>
       </dl>
+
+      <div className="mt-5 flex flex-wrap gap-3">
+        <Link
+          href={`/barangay/${barangay.psgcCode}`}
+          className="rounded-full bg-stone-950 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-800"
+        >
+          Open shareable page
+        </Link>
+        <a
+          href={`https://www.openstreetmap.org/?mlat=${barangay.centroid[1]}&mlon=${barangay.centroid[0]}#map=15/${barangay.centroid[1]}/${barangay.centroid[0]}`}
+          target="_blank"
+          rel="noreferrer"
+          className="rounded-full border border-stone-300 px-4 py-2 text-sm font-medium text-stone-700 transition hover:border-stone-400 hover:bg-stone-50"
+        >
+          Open in OSM
+        </a>
+      </div>
     </section>
   );
 }

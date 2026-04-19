@@ -1,9 +1,23 @@
 import { NextResponse } from "next/server";
 
-import { ILOILO_MUNICIPALITIES } from "../_data/iloilo";
+import { handleRouteError } from "../_lib/responses";
+import { listMunicipalities } from "@/lib/territory-data";
+
+const CACHE_CONTROL = "public, max-age=300, s-maxage=3600, stale-while-revalidate=86400";
 
 export async function GET() {
-  return NextResponse.json({
-    data: ILOILO_MUNICIPALITIES.map(({ psgcCode, name, type }) => ({ psgcCode, name, type })),
-  });
+  try {
+    const data = await listMunicipalities();
+
+    return NextResponse.json(
+      { data },
+      {
+        headers: {
+          "Cache-Control": CACHE_CONTROL,
+        },
+      },
+    );
+  } catch (error) {
+    return handleRouteError(error);
+  }
 }

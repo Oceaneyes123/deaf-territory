@@ -1,6 +1,11 @@
 #!/usr/bin/env tsx
 import { Client } from "pg";
 
+import { getPgClientConfig } from "../lib/pg-config";
+import { loadLocalEnv } from "./_lib/env";
+
+loadLocalEnv();
+
 type CheckResult = {
   name: string;
   count: number;
@@ -8,32 +13,37 @@ type CheckResult = {
 
 const CHECKS: Array<{ name: string; sql: string }> = [
   {
-    name: "missing_psgc_codes_in_boundaries",
+    name: "missing_canonical_barangays",
     sql: `
       SELECT COUNT(*)::int AS count
-      FROM barangay_boundaries b
-      LEFT JOIN psgc_admin p ON p.code = b.psgc_code
-      WHERE p.code IS NULL;
+      FROM psgc_admin_staging p
+      LEFT JOIN barangays b ON b.psgc_code = p.code
+      WHERE p.level = 'brgy' AND b.psgc_code IS NULL;
     `,
   },
   {
-    name: "duplicate_psgc_codes_in_boundaries",
+    name: "barangays_missing_municipality_fk",
     sql: `
       SELECT COUNT(*)::int AS count
-      FROM (
-        SELECT psgc_code
-        FROM barangay_boundaries
-        GROUP BY psgc_code
-        HAVING COUNT(*) > 1
-      ) d;
+      FROM barangays b
+      LEFT JOIN municipalities m ON m.psgc_code = b.municipality_psgc_code
+      WHERE m.psgc_code IS NULL;
     `,
   },
   {
-    name: "invalid_boundary_geometry",
+    name: "invalid_municipality_geometry",
     sql: `
       SELECT COUNT(*)::int AS count
-      FROM barangay_boundaries
-      WHERE NOT ST_IsValid(geom);
+      FROM municipalities
+      WHERE NOT ST_IsValid(geom) OR NOT ST_IsValid(geom_simplified);
+    `,
+  },
+  {
+    name: "invalid_barangay_geometry",
+    sql: `
+      SELECT COUNT(*)::int AS count
+      FROM barangays
+      WHERE NOT ST_IsValid(geom) OR NOT ST_IsValid(geom_simplified);
     `,
   },
   {
@@ -44,28 +54,38 @@ const CHECKS: Array<{ name: string; sql: string }> = [
         SELECT
           p.city_municipality_code,
           COUNT(*) FILTER (WHERE p.level = 'brgy') AS psgc_count,
-          COUNT(*) FILTER (WHERE b.psgc_code IS NOT NULL) AS boundary_count
-        FROM psgc_admin p
-        LEFT JOIN barangay_boundaries b ON b.psgc_code = p.code
+          COUNT(b.psgc_code) AS canonical_count
+        FROM psgc_admin_staging p
+        LEFT JOIN barangays b ON b.psgc_code = p.code
         WHERE p.level = 'brgy'
         GROUP BY p.city_municipality_code
-        HAVING COUNT(*) FILTER (WHERE p.level = 'brgy') <> COUNT(*) FILTER (WHERE b.psgc_code IS NOT NULL)
-      ) x;
+        HAVING COUNT(*) FILTER (WHERE p.level = 'brgy') <> COUNT(b.psgc_code)
+      ) mismatches;
+    `,
+  },
+  {
+    name: "missing_display_names",
+    sql: `
+      SELECT COUNT(*)::int AS count
+      FROM barangays
+      WHERE display_name = '' OR search_text = '';
     `,
   },
 ];
 
 async function runChecks(client: Client): Promise<CheckResult[]> {
   const results: CheckResult[] = [];
+
   for (const check of CHECKS) {
     const { rows } = await client.query<{ count: number }>(check.sql);
     results.push({ name: check.name, count: rows[0].count });
   }
+
   return results;
 }
 
 async function main() {
-  const client = new Client({ connectionString: process.env.DATABASE_URL });
+  const client = new Client(getPgClientConfig());
   await client.connect();
 
   try {
@@ -74,7 +94,9 @@ async function main() {
 
     for (const result of results) {
       const status = result.count === 0 ? "PASS" : "FAIL";
-      if (result.count !== 0) hasErrors = true;
+      if (result.count !== 0) {
+        hasErrors = true;
+      }
       console.log(`${status} ${result.name}: ${result.count}`);
     }
 

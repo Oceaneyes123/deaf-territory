@@ -34,7 +34,7 @@ export function validateSearchQuery(q: string | null): string | null {
   }
 
   const normalized = q.trim().replace(/\s+/g, " ");
-  if (normalized.length < 2) {
+  if (normalized.length < 2 || normalized.length > 80) {
     return null;
   }
 
