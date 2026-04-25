@@ -73,7 +73,7 @@ export default function MapView({ initialBarangayCode }: MapViewProps) {
   const [municipalityGeometry, setMunicipalityGeometry] = useState<BoundaryFeatureCollection | null>(null);
   const [barangayGeometry, setBarangayGeometry] = useState<BoundaryFeatureCollection | null>(null);
   const [loadedMunicipalityCode, setLoadedMunicipalityCode] = useState<string | null>(null);
-  const [selectedMunicipalityCode, setSelectedMunicipalityCode] = useState<string | null>(null);
+  const [selectedMunicipalityCodes, setSelectedMunicipalityCodes] = useState<string[]>([]);
   const [selectedBarangayCode, setSelectedBarangayCode] = useState<string | null>(initialBarangayCode ?? null);
   const [selectedBarangay, setSelectedBarangay] = useState<BarangayDetail | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -140,7 +140,12 @@ export default function MapView({ initialBarangayCode }: MapViewProps) {
       }
 
       startTransition(() => {
-        setSelectedMunicipalityCode(detail.municipalityPsgcCode);
+        // Barangay selection deterministically adds its municipality to the current selected set.
+        setSelectedMunicipalityCodes((currentCodes) =>
+          currentCodes.includes(detail.municipalityPsgcCode)
+            ? currentCodes
+            : [...currentCodes, detail.municipalityPsgcCode],
+        );
         setSelectedBarangayCode(detail.psgcCode);
         setSelectedBarangay(detail);
       });
@@ -157,18 +162,37 @@ export default function MapView({ initialBarangayCode }: MapViewProps) {
     }
   }
 
-  async function handleMunicipalityChange(psgcCode: string | null) {
+  async function handleMunicipalityToggle(psgcCode: string) {
     selectionRequestRef.current += 1;
     setSelectionError(null);
 
-    if (!psgcCode) {
+    const isRemoving = selectedMunicipalityCodes.includes(psgcCode);
+
+    if (isRemoving) {
+      const nextCodes = selectedMunicipalityCodes.filter((code) => code !== psgcCode);
       startTransition(() => {
-        setSelectedMunicipalityCode(null);
-        setSelectedBarangayCode(null);
-        setSelectedBarangay(null);
-        setBarangayGeometry(null);
-        setLoadedMunicipalityCode(null);
+        setSelectedMunicipalityCodes(nextCodes);
+
+        if (selectedBarangay?.municipalityPsgcCode === psgcCode) {
+          setSelectedBarangayCode(null);
+          setSelectedBarangay(null);
+        }
       });
+
+      if (nextCodes.length === 0) {
+        startTransition(() => {
+          setBarangayGeometry(null);
+          setLoadedMunicipalityCode(null);
+        });
+      } else if (loadedMunicipalityCode === psgcCode) {
+        const fallbackCode = nextCodes[nextCodes.length - 1];
+        try {
+          await ensureMunicipalityBarangays(fallbackCode);
+        } catch (error) {
+          setSelectionError(error instanceof Error ? error.message : "Unable to load municipality barangays.");
+        }
+      }
+
       return;
     }
 
@@ -176,9 +200,9 @@ export default function MapView({ initialBarangayCode }: MapViewProps) {
     try {
       await ensureMunicipalityBarangays(psgcCode);
       startTransition(() => {
-        setSelectedMunicipalityCode(psgcCode);
-        setSelectedBarangayCode(null);
-        setSelectedBarangay(null);
+        setSelectedMunicipalityCodes((currentCodes) =>
+          currentCodes.includes(psgcCode) ? currentCodes : [...currentCodes, psgcCode],
+        );
       });
     } catch (error) {
       setSelectionError(error instanceof Error ? error.message : "Unable to load municipality barangays.");
@@ -275,9 +299,13 @@ export default function MapView({ initialBarangayCode }: MapViewProps) {
     [municipalities],
   );
 
-  const selectedMunicipalityFeature = selectedMunicipalityCode
-    ? municipalityMap.get(selectedMunicipalityCode) ?? null
-    : null;
+  const selectedMunicipalityFeatures = useMemo(
+    () =>
+      selectedMunicipalityCodes
+        .map((code) => municipalityMap.get(code) ?? null)
+        .filter((feature): feature is NonNullable<typeof feature> => feature !== null),
+    [municipalityMap, selectedMunicipalityCodes],
+  );
 
   const overviewBbox = useMemo(
     () => mergeBBoxes((municipalityGeometry?.features ?? []).map((feature) => feature.properties.bbox)),
@@ -322,25 +350,29 @@ export default function MapView({ initialBarangayCode }: MapViewProps) {
       };
     }
 
-    if (selectedMunicipalityFeature) {
-      return { type: "FeatureCollection", features: [selectedMunicipalityFeature] };
+    if (selectedMunicipalityFeatures.length > 0) {
+      return { type: "FeatureCollection", features: selectedMunicipalityFeatures };
     }
 
     return null;
-  }, [selectedBarangay, selectedMunicipalityFeature]);
+  }, [selectedBarangay, selectedMunicipalityFeatures]);
 
-  const focusBbox = selectedBarangay?.bbox ?? selectedMunicipalityFeature?.properties.bbox ?? null;
+  const selectedMunicipalityBbox = useMemo(
+    () => mergeBBoxes(selectedMunicipalityFeatures.map((feature) => feature.properties.bbox)),
+    [selectedMunicipalityFeatures],
+  );
+  const focusBbox = selectedBarangay?.bbox ?? selectedMunicipalityBbox ?? null;
   const emptyMessage = useMemo(() => {
     if (debouncedSearchQuery.length >= 2) {
       return "No matching barangays found.";
     }
 
-    if (selectedMunicipalityCode) {
+    if (selectedMunicipalityCodes.length > 0) {
       return "No barangays found for this municipality.";
     }
 
     return "Select a municipality or search a barangay to begin.";
-  }, [debouncedSearchQuery.length, selectedMunicipalityCode]);
+  }, [debouncedSearchQuery.length, selectedMunicipalityCodes.length]);
 
   return (
     <div className="grid min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(245,201,120,0.18),_transparent_30%),linear-gradient(180deg,#f8f2e8_0%,#f3eee5_100%)] md:grid-cols-[390px_1fr]">
@@ -363,10 +395,10 @@ export default function MapView({ initialBarangayCode }: MapViewProps) {
           />
           <MunicipalitySelect
             municipalities={municipalityOptions}
-            value={selectedMunicipalityCode}
+            value={selectedMunicipalityCodes}
             loading={isMunicipalityLoading}
-            onChange={(value) => {
-              void handleMunicipalityChange(value);
+            onToggle={(value) => {
+              void handleMunicipalityToggle(value);
             }}
           />
           <div className="flex flex-wrap gap-2">
@@ -379,7 +411,7 @@ export default function MapView({ initialBarangayCode }: MapViewProps) {
                   setSearchError(null);
                   setSearchQuery("");
                   setSearchResults([]);
-                  setSelectedMunicipalityCode(null);
+                  setSelectedMunicipalityCodes([]);
                   setSelectedBarangayCode(null);
                   setSelectedBarangay(null);
                   setBarangayGeometry(null);
@@ -425,8 +457,10 @@ export default function MapView({ initialBarangayCode }: MapViewProps) {
           <p className="text-lg font-medium text-stone-900">
             {selectedBarangay
               ? selectedBarangay.displayName
-              : selectedMunicipalityFeature
-                ? `${selectedMunicipalityFeature.properties.name}, Iloilo`
+              : selectedMunicipalityFeatures.length === 1
+                ? `${selectedMunicipalityFeatures[0]?.properties.name}, Iloilo`
+                : selectedMunicipalityFeatures.length > 1
+                  ? `${selectedMunicipalityFeatures.length} municipalities selected`
                 : "Iloilo"}
           </p>
         </div>
@@ -437,10 +471,10 @@ export default function MapView({ initialBarangayCode }: MapViewProps) {
           highlight={highlight}
           focusBbox={focusBbox}
           overviewBbox={overviewBbox}
-          selectedMunicipalityCode={selectedMunicipalityCode}
+          selectedMunicipalityCodes={selectedMunicipalityCodes}
           selectedBarangayCode={selectedBarangayCode}
           onMunicipalitySelect={(psgcCode) => {
-            void handleMunicipalityChange(psgcCode);
+            void handleMunicipalityToggle(psgcCode);
           }}
           onBarangaySelect={(psgcCode) => {
             void selectBarangay(psgcCode);
