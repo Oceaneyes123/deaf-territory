@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { startTransition, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 
 import type { BarangayDetail, BBox, BoundaryFeatureCollection, MunicipalitySummary, SearchResult } from "@/lib/territory-types";
@@ -28,6 +29,15 @@ type BootstrapPayload = {
 };
 
 const EMPTY_COLLECTION: BoundaryFeatureCollection = { type: "FeatureCollection", features: [] };
+const LINK_COPY_RESET_DELAY_MS = 1800;
+
+function parseCommaSeparatedQueryValue(value: string | null): string[] {
+  if (!value) {
+    return [];
+  }
+
+  return Array.from(new Set(value.split(",").map((token) => token.trim()).filter(Boolean)));
+}
 
 function useDebouncedValue<T>(value: T, delayMs: number): T {
   const [debouncedValue, setDebouncedValue] = useState(value);
@@ -69,6 +79,9 @@ function mergeBBoxes(bboxes: BBox[]): BBox | null {
 }
 
 export default function MapView({ initialBarangayCode }: MapViewProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [municipalities, setMunicipalities] = useState<MunicipalitySummary[]>([]);
   const [municipalityGeometry, setMunicipalityGeometry] = useState<BoundaryFeatureCollection | null>(null);
   const [barangayGeometry, setBarangayGeometry] = useState<BoundaryFeatureCollection | null>(null);
@@ -85,7 +98,9 @@ export default function MapView({ initialBarangayCode }: MapViewProps) {
   const [isMunicipalityLoading, setIsMunicipalityLoading] = useState(false);
   const [isBarangayLoading, setIsBarangayLoading] = useState(false);
   const [isSearchLoading, setIsSearchLoading] = useState(false);
+  const [copyState, setCopyState] = useState<"idle" | "copied" | "error">("idle");
   const selectionRequestRef = useRef(0);
+  const hasHydratedQueryRef = useRef(false);
   const barangayGeometryCacheRef = useRef(new Map<string, BoundaryFeatureCollection>());
   const barangayDetailCacheRef = useRef(new Map<string, BarangayDetail>());
 
@@ -236,15 +251,74 @@ export default function MapView({ initialBarangayCode }: MapViewProps) {
     return () => controller.abort();
   }, []);
 
+  const queryMunicipalityCodes = useMemo(() => parseCommaSeparatedQueryValue(searchParams.get("m")), [searchParams]);
+  const queryBarangayCode = searchParams.get("b");
+
   useEffect(() => {
-    if (!initialBarangayCode || isBootLoading || !municipalityGeometry) {
+    if (isBootLoading || !municipalityGeometry || hasHydratedQueryRef.current) {
       return;
     }
 
-    void selectBarangay(initialBarangayCode);
-    // initial deep-link hydration should run once after boot data is ready
+    const validMunicipalityCodes = new Set(municipalities.map((municipality) => municipality.psgcCode));
+    const initialMunicipalityCodes = queryMunicipalityCodes.filter((code) => validMunicipalityCodes.has(code));
+    const initialFocusBarangay = queryBarangayCode ?? initialBarangayCode ?? null;
+
+    hasHydratedQueryRef.current = true;
+
+    void (async () => {
+      if (initialMunicipalityCodes.length > 0) {
+        startTransition(() => {
+          setSelectedMunicipalityCodes(initialMunicipalityCodes);
+        });
+      }
+
+      if (initialFocusBarangay) {
+        await selectBarangay(initialFocusBarangay);
+        return;
+      }
+
+      if (initialMunicipalityCodes.length > 0) {
+        const codeToLoad = initialMunicipalityCodes[initialMunicipalityCodes.length - 1];
+        if (codeToLoad) {
+          await ensureMunicipalityBarangays(codeToLoad);
+        }
+      }
+    })();
+    // Initial deep-link hydration should run once after boot data is ready.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialBarangayCode, isBootLoading, municipalityGeometry]);
+  }, [initialBarangayCode, isBootLoading, municipalityGeometry, municipalities, queryBarangayCode, queryMunicipalityCodes]);
+
+  useEffect(() => {
+    if (isBootLoading || !hasHydratedQueryRef.current) {
+      return;
+    }
+
+    const nextParams = new URLSearchParams();
+    if (selectedMunicipalityCodes.length > 0) {
+      nextParams.set("m", selectedMunicipalityCodes.join(","));
+    }
+    if (selectedBarangayCode) {
+      nextParams.set("b", selectedBarangayCode);
+    }
+
+    const nextQueryString = nextParams.toString();
+    const currentQueryString = searchParams.toString();
+    if (nextQueryString === currentQueryString) {
+      return;
+    }
+
+    const targetUrl = nextQueryString ? `${pathname}?${nextQueryString}` : pathname;
+    router.replace(targetUrl, { scroll: false });
+  }, [isBootLoading, pathname, router, searchParams, selectedBarangayCode, selectedMunicipalityCodes]);
+
+  useEffect(() => {
+    if (copyState === "idle") {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => setCopyState("idle"), LINK_COPY_RESET_DELAY_MS);
+    return () => window.clearTimeout(timeout);
+  }, [copyState]);
 
   useEffect(() => {
     if (debouncedSearchQuery.length < 2) {
@@ -369,6 +443,15 @@ export default function MapView({ initialBarangayCode }: MapViewProps) {
     return "Select a municipality or search a barangay to begin.";
   }, [debouncedSearchQuery.length, selectedMunicipalityCodes.length]);
 
+  async function handleCopyContextLink() {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setCopyState("copied");
+    } catch (_error) {
+      setCopyState("error");
+    }
+  }
+
   return (
     <div className="grid min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(245,201,120,0.18),_transparent_30%),linear-gradient(180deg,#f8f2e8_0%,#f3eee5_100%)] md:grid-cols-[390px_1fr]">
       <aside className="flex min-h-screen flex-col gap-6 border-b border-stone-200/70 px-5 py-6 md:border-b-0 md:border-r md:px-7">
@@ -444,7 +527,14 @@ export default function MapView({ initialBarangayCode }: MapViewProps) {
           }}
         />
 
-        <BarangayDetails barangay={selectedBarangay} loading={isBarangayLoading} />
+        <BarangayDetails
+          barangay={selectedBarangay}
+          loading={isBarangayLoading}
+          onCopyLink={() => {
+            void handleCopyContextLink();
+          }}
+          copyState={copyState}
+        />
       </aside>
 
       <section className="flex min-h-screen flex-col px-5 py-6 md:px-6">

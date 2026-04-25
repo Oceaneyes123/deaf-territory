@@ -7,6 +7,8 @@ import type { BarangayDetail } from "@/lib/territory-types";
 type BarangayDetailsProps = {
   barangay: BarangayDetail | null;
   loading?: boolean;
+  onCopyLink?: () => void;
+  copyState?: "idle" | "copied" | "error";
 };
 
 function formatNumber(value: number | null, digits: number): string {
@@ -17,7 +19,12 @@ function formatNumber(value: number | null, digits: number): string {
   return value.toFixed(digits);
 }
 
-export default function BarangayDetails({ barangay, loading = false }: BarangayDetailsProps) {
+export default function BarangayDetails({
+  barangay,
+  loading = false,
+  onCopyLink,
+  copyState = "idle",
+}: BarangayDetailsProps) {
   if (loading) {
     return (
       <section className="rounded-[28px] border border-stone-200 bg-white/90 p-5 shadow-[0_18px_40px_rgba(41,37,36,0.08)]">
@@ -71,6 +78,13 @@ export default function BarangayDetails({ barangay, loading = false }: BarangayD
         >
           Page
         </Link>
+        <button
+          type="button"
+          onClick={onCopyLink}
+          className="rounded-full border border-stone-300 px-4 py-2 text-sm font-medium text-stone-700 transition hover:border-stone-400 hover:bg-stone-50"
+        >
+          {copyState === "copied" ? "Link copied" : copyState === "error" ? "Copy failed" : "Copy link"}
+        </button>
         <a
           href={`https://www.openstreetmap.org/?mlat=${barangay.centroid[1]}&mlon=${barangay.centroid[0]}#map=15/${barangay.centroid[1]}/${barangay.centroid[0]}`}
           target="_blank"
