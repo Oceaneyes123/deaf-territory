@@ -162,48 +162,43 @@ export default function MapView({ initialBarangayCode }: MapViewProps) {
     }
   }
 
-  async function handleMunicipalityToggle(psgcCode: string) {
+  async function handleMunicipalitySelectionChange(nextCodes: string[]) {
     selectionRequestRef.current += 1;
     setSelectionError(null);
+    const removedCodes = selectedMunicipalityCodes.filter((code) => !nextCodes.includes(code));
+    const addedCodes = nextCodes.filter((code) => !selectedMunicipalityCodes.includes(code));
 
-    const isRemoving = selectedMunicipalityCodes.includes(psgcCode);
+    startTransition(() => {
+      setSelectedMunicipalityCodes(nextCodes);
 
-    if (isRemoving) {
-      const nextCodes = selectedMunicipalityCodes.filter((code) => code !== psgcCode);
-      startTransition(() => {
-        setSelectedMunicipalityCodes(nextCodes);
-
-        if (selectedBarangay?.municipalityPsgcCode === psgcCode) {
-          setSelectedBarangayCode(null);
-          setSelectedBarangay(null);
-        }
-      });
-
-      if (nextCodes.length === 0) {
-        startTransition(() => {
-          setBarangayGeometry(null);
-          setLoadedMunicipalityCode(null);
-        });
-      } else if (loadedMunicipalityCode === psgcCode) {
-        const fallbackCode = nextCodes[nextCodes.length - 1];
-        try {
-          await ensureMunicipalityBarangays(fallbackCode);
-        } catch (error) {
-          setSelectionError(error instanceof Error ? error.message : "Unable to load municipality barangays.");
-        }
+      if (selectedBarangay && removedCodes.includes(selectedBarangay.municipalityPsgcCode)) {
+        setSelectedBarangayCode(null);
+        setSelectedBarangay(null);
       }
+    });
 
+    if (nextCodes.length === 0) {
+      startTransition(() => {
+        setBarangayGeometry(null);
+        setLoadedMunicipalityCode(null);
+      });
+      return;
+    }
+
+    const lastAddedCode = addedCodes.length > 0 ? addedCodes[addedCodes.length - 1] : null;
+    const fallbackCode =
+      loadedMunicipalityCode && removedCodes.includes(loadedMunicipalityCode)
+        ? nextCodes[nextCodes.length - 1]
+        : null;
+    const codeToLoad = lastAddedCode ?? fallbackCode;
+
+    if (!codeToLoad) {
       return;
     }
 
     setIsMunicipalityLoading(true);
     try {
-      await ensureMunicipalityBarangays(psgcCode);
-      startTransition(() => {
-        setSelectedMunicipalityCodes((currentCodes) =>
-          currentCodes.includes(psgcCode) ? currentCodes : [...currentCodes, psgcCode],
-        );
-      });
+      await ensureMunicipalityBarangays(codeToLoad);
     } catch (error) {
       setSelectionError(error instanceof Error ? error.message : "Unable to load municipality barangays.");
     } finally {
@@ -397,8 +392,8 @@ export default function MapView({ initialBarangayCode }: MapViewProps) {
             municipalities={municipalityOptions}
             value={selectedMunicipalityCodes}
             loading={isMunicipalityLoading}
-            onToggle={(value) => {
-              void handleMunicipalityToggle(value);
+            onChange={(nextCodes) => {
+              void handleMunicipalitySelectionChange(nextCodes);
             }}
           />
           <div className="flex flex-wrap gap-2">
@@ -474,7 +469,10 @@ export default function MapView({ initialBarangayCode }: MapViewProps) {
           selectedMunicipalityCodes={selectedMunicipalityCodes}
           selectedBarangayCode={selectedBarangayCode}
           onMunicipalitySelect={(psgcCode) => {
-            void handleMunicipalityToggle(psgcCode);
+            const nextCodes = selectedMunicipalityCodes.includes(psgcCode)
+              ? selectedMunicipalityCodes.filter((code) => code !== psgcCode)
+              : [...selectedMunicipalityCodes, psgcCode];
+            void handleMunicipalitySelectionChange(nextCodes);
           }}
           onBarangaySelect={(psgcCode) => {
             void selectBarangay(psgcCode);
