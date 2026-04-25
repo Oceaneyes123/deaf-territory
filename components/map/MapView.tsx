@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { startTransition, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 
 import type { BarangayDetail, BBox, BoundaryFeatureCollection, MunicipalitySummary, SearchResult } from "@/lib/territory-types";
@@ -17,6 +17,8 @@ const MapCanvas = dynamic(() => import("./MapCanvas"), {
 
 type MapViewProps = {
   initialBarangayCode?: string;
+  initialQueryMunicipalityCodes?: string[];
+  initialQueryBarangayCode?: string | null;
 };
 
 type DataResponse<T> = {
@@ -30,14 +32,6 @@ type BootstrapPayload = {
 
 const EMPTY_COLLECTION: BoundaryFeatureCollection = { type: "FeatureCollection", features: [] };
 const LINK_COPY_RESET_DELAY_MS = 1800;
-
-function parseCommaSeparatedQueryValue(value: string | null): string[] {
-  if (!value) {
-    return [];
-  }
-
-  return Array.from(new Set(value.split(",").map((token) => token.trim()).filter(Boolean)));
-}
 
 function useDebouncedValue<T>(value: T, delayMs: number): T {
   const [debouncedValue, setDebouncedValue] = useState(value);
@@ -78,10 +72,13 @@ function mergeBBoxes(bboxes: BBox[]): BBox | null {
   );
 }
 
-export default function MapView({ initialBarangayCode }: MapViewProps) {
+export default function MapView({
+  initialBarangayCode,
+  initialQueryMunicipalityCodes = [],
+  initialQueryBarangayCode = null,
+}: MapViewProps) {
   const router = useRouter();
   const pathname = usePathname();
-  const searchParams = useSearchParams();
   const [municipalities, setMunicipalities] = useState<MunicipalitySummary[]>([]);
   const [municipalityGeometry, setMunicipalityGeometry] = useState<BoundaryFeatureCollection | null>(null);
   const [barangayGeometry, setBarangayGeometry] = useState<BoundaryFeatureCollection | null>(null);
@@ -251,17 +248,14 @@ export default function MapView({ initialBarangayCode }: MapViewProps) {
     return () => controller.abort();
   }, []);
 
-  const queryMunicipalityCodes = useMemo(() => parseCommaSeparatedQueryValue(searchParams.get("m")), [searchParams]);
-  const queryBarangayCode = searchParams.get("b");
-
   useEffect(() => {
     if (isBootLoading || !municipalityGeometry || hasHydratedQueryRef.current) {
       return;
     }
 
     const validMunicipalityCodes = new Set(municipalities.map((municipality) => municipality.psgcCode));
-    const initialMunicipalityCodes = queryMunicipalityCodes.filter((code) => validMunicipalityCodes.has(code));
-    const initialFocusBarangay = queryBarangayCode ?? initialBarangayCode ?? null;
+    const initialMunicipalityCodes = initialQueryMunicipalityCodes.filter((code) => validMunicipalityCodes.has(code));
+    const initialFocusBarangay = initialQueryBarangayCode ?? initialBarangayCode ?? null;
 
     hasHydratedQueryRef.current = true;
 
@@ -286,7 +280,14 @@ export default function MapView({ initialBarangayCode }: MapViewProps) {
     })();
     // Initial deep-link hydration should run once after boot data is ready.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialBarangayCode, isBootLoading, municipalityGeometry, municipalities, queryBarangayCode, queryMunicipalityCodes]);
+  }, [
+    initialBarangayCode,
+    initialQueryBarangayCode,
+    initialQueryMunicipalityCodes,
+    isBootLoading,
+    municipalityGeometry,
+    municipalities,
+  ]);
 
   useEffect(() => {
     if (isBootLoading || !hasHydratedQueryRef.current) {
@@ -302,14 +303,16 @@ export default function MapView({ initialBarangayCode }: MapViewProps) {
     }
 
     const nextQueryString = nextParams.toString();
-    const currentQueryString = searchParams.toString();
+    const currentQueryString = window.location.search.startsWith("?")
+      ? window.location.search.slice(1)
+      : window.location.search;
     if (nextQueryString === currentQueryString) {
       return;
     }
 
     const targetUrl = nextQueryString ? `${pathname}?${nextQueryString}` : pathname;
     router.replace(targetUrl, { scroll: false });
-  }, [isBootLoading, pathname, router, searchParams, selectedBarangayCode, selectedMunicipalityCodes]);
+  }, [isBootLoading, pathname, router, selectedBarangayCode, selectedMunicipalityCodes]);
 
   useEffect(() => {
     if (copyState === "idle") {
