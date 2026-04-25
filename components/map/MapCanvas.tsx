@@ -7,7 +7,6 @@ import maplibregl, {
   type LngLatBoundsLike,
   type Map as MapLibreMap,
   type StyleSpecification,
-  type StyleSpecificationLayer,
 } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 
@@ -47,6 +46,12 @@ const FALLBACK_RASTER_STYLE: StyleSpecification = {
   ],
 };
 
+type StyleLayerLike = {
+  id: string;
+  type?: string;
+  layout?: Record<string, unknown>;
+};
+
 const LABEL_LAYER_TOKENS = [
   "place",
   "settlement",
@@ -59,7 +64,7 @@ const LABEL_LAYER_TOKENS = [
   "country",
 ];
 
-function isPlaceLabelLayer(layer: StyleSpecificationLayer): boolean {
+function isPlaceLabelLayer(layer: StyleLayerLike): boolean {
   if (layer.type !== "symbol") {
     return false;
   }
