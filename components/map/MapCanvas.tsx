@@ -29,6 +29,7 @@ const VECTOR_STYLE_URL = "https://demotiles.maplibre.org/style.json";
 
 const FALLBACK_RASTER_STYLE: StyleSpecification = {
   version: 8,
+  glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
   sources: {
     osm: {
       type: "raster",
@@ -63,6 +64,10 @@ const LABEL_LAYER_TOKENS = [
   "state",
   "country",
 ];
+
+function getNameTextField(): ["get", string] {
+  return ["get", "name"];
+}
 
 function isPlaceLabelLayer(layer: StyleLayerLike): boolean {
   if (layer.type !== "symbol") {
@@ -139,6 +144,30 @@ function addOverlayLayers(map: MapLibreMap) {
     });
   }
 
+  if (!map.getLayer("municipalities-label")) {
+    map.addLayer({
+      id: "municipalities-label",
+      type: "symbol",
+      source: "municipalities",
+      layout: {
+        "text-field": getNameTextField(),
+        "text-font": ["Open Sans Regular"],
+        "text-size": ["interpolate", ["linear"], ["zoom"], 8, 11, 11, 15, 14, 20],
+        "text-letter-spacing": 0.02,
+        "text-padding": 8,
+        "text-allow-overlap": false,
+        "text-ignore-placement": false,
+      },
+      paint: {
+        "text-color": "#3f2f22",
+        "text-halo-color": "#f6edcf",
+        "text-halo-width": 1.6,
+        "text-halo-blur": 0.4,
+        "text-opacity": ["interpolate", ["linear"], ["zoom"], 8, 0.86, 11, 0.72, 12.5, 0],
+      },
+    });
+  }
+
   if (!map.getLayer("barangays-fill")) {
     map.addLayer({
       id: "barangays-fill",
@@ -160,6 +189,29 @@ function addOverlayLayers(map: MapLibreMap) {
         "line-color": "#8b5e3c",
         "line-width": 1,
         "line-opacity": 0.85,
+      },
+    });
+  }
+
+  if (!map.getLayer("barangays-label")) {
+    map.addLayer({
+      id: "barangays-label",
+      type: "symbol",
+      source: "barangays",
+      minzoom: 10.5,
+      layout: {
+        "text-field": getNameTextField(),
+        "text-font": ["Open Sans Regular"],
+        "text-size": ["interpolate", ["linear"], ["zoom"], 10.5, 10, 13, 12, 15, 15],
+        "text-padding": 6,
+        "text-allow-overlap": false,
+        "text-ignore-placement": false,
+      },
+      paint: {
+        "text-color": "#4b3325",
+        "text-halo-color": "#fff3dc",
+        "text-halo-width": 1.4,
+        "text-halo-blur": 0.35,
       },
     });
   }
