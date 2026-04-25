@@ -18,7 +18,7 @@ type MapCanvasProps = {
   highlight: BoundaryFeatureCollection | null;
   focusBbox: BBox | null;
   overviewBbox: BBox | null;
-  selectedMunicipalityCode: string | null;
+  selectedMunicipalityCodes: string[];
   selectedBarangayCode: string | null;
   onMunicipalitySelect: (psgcCode: string) => void;
   onBarangaySelect: (psgcCode: string) => void;
@@ -221,7 +221,7 @@ export default function MapCanvas({
   highlight,
   focusBbox,
   overviewBbox,
-  selectedMunicipalityCode,
+  selectedMunicipalityCodes,
   selectedBarangayCode,
   onMunicipalitySelect,
   onBarangaySelect,
@@ -353,19 +353,24 @@ export default function MapCanvas({
       return;
     }
 
+    const selectedCodesExpression =
+      selectedMunicipalityCodes.length > 0
+        ? ["in", ["get", "psgcCode"], ["literal", selectedMunicipalityCodes]]
+        : false;
+
     map.setPaintProperty("municipalities-fill", "fill-color", [
       "case",
-      ["==", ["get", "psgcCode"], selectedMunicipalityCode ?? ""],
+      selectedCodesExpression,
       "#b8692f",
       "#c9b78d",
     ]);
     map.setPaintProperty("municipalities-fill", "fill-opacity", [
       "case",
-      ["==", ["get", "psgcCode"], selectedMunicipalityCode ?? ""],
+      selectedCodesExpression,
       0.4,
       0.24,
     ]);
-  }, [selectedMunicipalityCode]);
+  }, [selectedMunicipalityCodes]);
 
   useEffect(() => {
     const map = mapRef.current;
