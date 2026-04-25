@@ -320,6 +320,17 @@ export default function MapView({ initialBarangayCode }: MapViewProps) {
   }, [selectedBarangay, selectedMunicipalityFeature]);
 
   const focusBbox = selectedBarangay?.bbox ?? selectedMunicipalityFeature?.properties.bbox ?? null;
+  const emptyMessage = useMemo(() => {
+    if (debouncedSearchQuery.length >= 2) {
+      return "No matching barangays found.";
+    }
+
+    if (selectedMunicipalityCode) {
+      return "No barangays found for this municipality.";
+    }
+
+    return "Select a municipality or search a barangay to begin.";
+  }, [debouncedSearchQuery.length, selectedMunicipalityCode]);
 
   return (
     <div className="grid min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(245,201,120,0.18),_transparent_30%),linear-gradient(180deg,#f8f2e8_0%,#f3eee5_100%)] md:grid-cols-[390px_1fr]">
@@ -383,7 +394,7 @@ export default function MapView({ initialBarangayCode }: MapViewProps) {
           title={debouncedSearchQuery.length >= 2 ? "Results" : "Barangays"}
           items={listItems}
           selectedCode={selectedBarangayCode}
-          emptyMessage={debouncedSearchQuery.length >= 2 || selectedMunicipalityCode ? "No results." : ""}
+          emptyMessage={emptyMessage}
           onSelect={(psgcCode) => {
             void selectBarangay(psgcCode);
           }}
