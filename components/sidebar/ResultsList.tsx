@@ -12,6 +12,7 @@ type ResultsListProps = {
   items: ResultItem[];
   selectedCode: string | null;
   emptyMessage: string;
+  isLoading?: boolean;
   onSelect: (psgcCode: string) => void;
 };
 
@@ -20,6 +21,7 @@ export default function ResultsList({
   items,
   selectedCode,
   emptyMessage,
+  isLoading = false,
   onSelect,
 }: ResultsListProps) {
   const showEmptyState = items.length === 0 && emptyMessage.trim().length > 0;
@@ -27,7 +29,18 @@ export default function ResultsList({
   return (
     <section className="flex min-h-0 flex-1 flex-col">
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-xs font-semibold uppercase tracking-[0.24em] text-stone-500">{title}</h2>
+        <div className="flex items-center gap-2">
+          <h2 className="text-xs font-semibold uppercase tracking-[0.24em] text-stone-500">{title}</h2>
+          {isLoading ? (
+            <span className="inline-flex items-center gap-1 text-[11px] text-stone-400" role="status" aria-live="polite">
+              <span
+                aria-hidden="true"
+                className="inline-block h-3 w-3 animate-spin rounded-full border border-stone-400 border-t-transparent"
+              />
+              Searching...
+            </span>
+          ) : null}
+        </div>
         <span className="text-xs text-stone-400">{items.length}</span>
       </div>
 

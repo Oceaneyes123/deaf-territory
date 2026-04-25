@@ -80,9 +80,11 @@ export default function MapView({ initialBarangayCode }: MapViewProps) {
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [bootError, setBootError] = useState<string | null>(null);
   const [selectionError, setSelectionError] = useState<string | null>(null);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const [isBootLoading, setIsBootLoading] = useState(true);
   const [isMunicipalityLoading, setIsMunicipalityLoading] = useState(false);
   const [isBarangayLoading, setIsBarangayLoading] = useState(false);
+  const [isSearchLoading, setIsSearchLoading] = useState(false);
   const selectionRequestRef = useRef(0);
   const barangayGeometryCacheRef = useRef(new Map<string, BoundaryFeatureCollection>());
   const barangayDetailCacheRef = useRef(new Map<string, BarangayDetail>());
@@ -228,12 +230,16 @@ export default function MapView({ initialBarangayCode }: MapViewProps) {
   useEffect(() => {
     if (debouncedSearchQuery.length < 2) {
       setSearchResults([]);
+      setIsSearchLoading(false);
       return;
     }
 
     const controller = new AbortController();
 
     async function runSearch() {
+      setIsSearchLoading(true);
+      setSearchError(null);
+
       try {
         const response = await fetchJson<DataResponse<SearchResult[]>>(
           `/api/barangays/search?q=${encodeURIComponent(debouncedSearchQuery)}`,
@@ -244,7 +250,11 @@ export default function MapView({ initialBarangayCode }: MapViewProps) {
         });
       } catch (error) {
         if (!controller.signal.aborted) {
-          setSelectionError(error instanceof Error ? error.message : "Search failed.");
+          setSearchError(error instanceof Error ? error.message : "Search failed.");
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setIsSearchLoading(false);
         }
       }
     }
@@ -346,7 +356,7 @@ export default function MapView({ initialBarangayCode }: MapViewProps) {
           <SearchBox
             value={searchQuery}
             onChange={(value) => {
-              setSelectionError(null);
+              setSearchError(null);
               setSearchQuery(value);
             }}
             placeholder="Search"
@@ -366,6 +376,7 @@ export default function MapView({ initialBarangayCode }: MapViewProps) {
               onClick={() => {
                 selectionRequestRef.current += 1;
                 startTransition(() => {
+                  setSearchError(null);
                   setSearchQuery("");
                   setSearchResults([]);
                   setSelectedMunicipalityCode(null);
@@ -389,12 +400,18 @@ export default function MapView({ initialBarangayCode }: MapViewProps) {
             {selectionError}
           </div>
         ) : null}
+        {searchError ? (
+          <div className="rounded-[24px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            {searchError}
+          </div>
+        ) : null}
 
         <ResultsList
           title={debouncedSearchQuery.length >= 2 ? "Results" : "Barangays"}
           items={listItems}
           selectedCode={selectedBarangayCode}
           emptyMessage={emptyMessage}
+          isLoading={isSearchLoading}
           onSelect={(psgcCode) => {
             void selectBarangay(psgcCode);
           }}
