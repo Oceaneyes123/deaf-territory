@@ -22,6 +22,8 @@ export default function ResultsList({
   emptyMessage,
   onSelect,
 }: ResultsListProps) {
+  const showEmptyState = items.length === 0 && emptyMessage.trim().length > 0;
+
   return (
     <section className="flex min-h-0 flex-1 flex-col">
       <div className="mb-3 flex items-center justify-between">
@@ -29,12 +31,18 @@ export default function ResultsList({
         <span className="text-xs text-stone-400">{items.length}</span>
       </div>
 
-      {items.length === 0 ? (
-        emptyMessage ? (
-        <div className="rounded-2xl border border-dashed border-stone-300 bg-white/50 px-4 py-5 text-sm text-stone-500">
-          {emptyMessage}
+      {showEmptyState ? (
+        <div className="rounded-2xl border border-dashed border-stone-300 bg-white/70 px-4 py-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]">
+          <div className="flex items-start gap-3">
+            <span
+              aria-hidden="true"
+              className="mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-stone-200 bg-stone-100/80 text-stone-500"
+            >
+              •
+            </span>
+            <p className="text-sm font-medium leading-6 text-stone-600">{emptyMessage}</p>
+          </div>
         </div>
-        ) : null
       ) : (
         <ul className="space-y-2 overflow-y-auto pr-1">
           {items.map((item) => {
