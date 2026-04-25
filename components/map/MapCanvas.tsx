@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FeatureCollection } from "geojson";
 import maplibregl, {
   type GeoJSONSource,
   type LngLatBoundsLike,
   type Map as MapLibreMap,
   type StyleSpecification,
+  type StyleSpecificationLayer,
 } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 
@@ -25,8 +26,9 @@ type MapCanvasProps = {
 };
 
 const EMPTY_COLLECTION: BoundaryFeatureCollection = { type: "FeatureCollection", features: [] };
+const VECTOR_STYLE_URL = "https://demotiles.maplibre.org/style.json";
 
-const MAP_STYLE: StyleSpecification = {
+const FALLBACK_RASTER_STYLE: StyleSpecification = {
   version: 8,
   sources: {
     osm: {
@@ -44,6 +46,132 @@ const MAP_STYLE: StyleSpecification = {
     },
   ],
 };
+
+const LABEL_LAYER_TOKENS = [
+  "place",
+  "settlement",
+  "municipality",
+  "locality",
+  "village",
+  "town",
+  "city",
+  "state",
+  "country",
+];
+
+function isPlaceLabelLayer(layer: StyleSpecificationLayer): boolean {
+  if (layer.type !== "symbol") {
+    return false;
+  }
+
+  const id = layer.id.toLowerCase();
+  if (LABEL_LAYER_TOKENS.some((token) => id.includes(token))) {
+    return true;
+  }
+
+  return typeof layer.layout?.["text-field"] !== "undefined" && id.includes("label");
+}
+
+function applyLabelReadabilityStyle(map: MapLibreMap) {
+  const layers = map.getStyle().layers ?? [];
+
+  for (const layer of layers) {
+    if (!isPlaceLabelLayer(layer)) {
+      continue;
+    }
+
+    map.setPaintProperty(layer.id, "text-color", "#2f241b");
+    map.setPaintProperty(layer.id, "text-halo-color", "#f5ecdd");
+    map.setPaintProperty(layer.id, "text-halo-width", 1.2);
+    map.setPaintProperty(layer.id, "text-halo-blur", 0.35);
+  }
+}
+
+function addOverlayLayers(map: MapLibreMap) {
+  if (!map.getSource("municipalities")) {
+    map.addSource("municipalities", {
+      type: "geojson",
+      data: EMPTY_COLLECTION as FeatureCollection,
+    });
+  }
+
+  if (!map.getSource("barangays")) {
+    map.addSource("barangays", {
+      type: "geojson",
+      data: EMPTY_COLLECTION as FeatureCollection,
+    });
+  }
+
+  if (!map.getSource("highlight")) {
+    map.addSource("highlight", {
+      type: "geojson",
+      data: EMPTY_COLLECTION as FeatureCollection,
+    });
+  }
+
+  if (!map.getLayer("municipalities-fill")) {
+    map.addLayer({
+      id: "municipalities-fill",
+      type: "fill",
+      source: "municipalities",
+      paint: {
+        "fill-color": "#c9b78d",
+        "fill-opacity": 0.26,
+      },
+    });
+  }
+
+  if (!map.getLayer("municipalities-outline")) {
+    map.addLayer({
+      id: "municipalities-outline",
+      type: "line",
+      source: "municipalities",
+      paint: {
+        "line-color": "#534338",
+        "line-width": 1.4,
+        "line-opacity": 0.72,
+      },
+    });
+  }
+
+  if (!map.getLayer("barangays-fill")) {
+    map.addLayer({
+      id: "barangays-fill",
+      type: "fill",
+      source: "barangays",
+      paint: {
+        "fill-color": "#f0dcc0",
+        "fill-opacity": 0.55,
+      },
+    });
+  }
+
+  if (!map.getLayer("barangays-outline")) {
+    map.addLayer({
+      id: "barangays-outline",
+      type: "line",
+      source: "barangays",
+      paint: {
+        "line-color": "#8b5e3c",
+        "line-width": 1,
+        "line-opacity": 0.85,
+      },
+    });
+  }
+
+  if (!map.getLayer("highlight-outline")) {
+    map.addLayer({
+      id: "highlight-outline",
+      type: "line",
+      source: "highlight",
+      paint: {
+        "line-color": "#8f1d1d",
+        "line-width": 3,
+        "line-dasharray": [1.2, 1],
+      },
+    });
+  }
+}
 
 function updateGeoJsonSource(map: MapLibreMap, sourceId: string, data: BoundaryFeatureCollection | null) {
   const source = map.getSource(sourceId) as GeoJSONSource | undefined;
@@ -98,6 +226,7 @@ export default function MapCanvas({
   const lastViewportKeyRef = useRef<string | null>(null);
   const municipalitySelectRef = useRef(onMunicipalitySelect);
   const barangaySelectRef = useRef(onBarangaySelect);
+  const [hasStyleError, setHasStyleError] = useState(false);
 
   useEffect(() => {
     municipalitySelectRef.current = onMunicipalitySelect;
@@ -114,103 +243,69 @@ export default function MapCanvas({
 
     const map = new maplibregl.Map({
       container: containerRef.current,
-      style: MAP_STYLE,
+      style: VECTOR_STYLE_URL,
       center: [122.5621, 10.7202],
       zoom: 9.8,
     });
 
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
 
-    map.on("load", () => {
-      map.addSource("municipalities", {
-        type: "geojson",
-        data: EMPTY_COLLECTION as FeatureCollection,
-      });
-      map.addSource("barangays", {
-        type: "geojson",
-        data: EMPTY_COLLECTION as FeatureCollection,
-      });
-      map.addSource("highlight", {
-        type: "geojson",
-        data: EMPTY_COLLECTION as FeatureCollection,
-      });
+    let styleReady = false;
+    let usingFallbackStyle = false;
 
-      map.addLayer({
-        id: "municipalities-fill",
-        type: "fill",
-        source: "municipalities",
-        paint: {
-          "fill-color": "#c9b78d",
-          "fill-opacity": 0.26,
-        },
-      });
-      map.addLayer({
-        id: "municipalities-outline",
-        type: "line",
-        source: "municipalities",
-        paint: {
-          "line-color": "#534338",
-          "line-width": 1.4,
-          "line-opacity": 0.72,
-        },
-      });
-      map.addLayer({
-        id: "barangays-fill",
-        type: "fill",
-        source: "barangays",
-        paint: {
-          "fill-color": "#f0dcc0",
-          "fill-opacity": 0.55,
-        },
-      });
-      map.addLayer({
-        id: "barangays-outline",
-        type: "line",
-        source: "barangays",
-        paint: {
-          "line-color": "#8b5e3c",
-          "line-width": 1,
-          "line-opacity": 0.85,
-        },
-      });
-      map.addLayer({
-        id: "highlight-outline",
-        type: "line",
-        source: "highlight",
-        paint: {
-          "line-color": "#8f1d1d",
-          "line-width": 3,
-          "line-dasharray": [1.2, 1],
-        },
-      });
-
-      map.on("click", "municipalities-fill", (event) => {
-        const code = event.features?.[0]?.properties?.psgcCode;
-        if (typeof code === "string") {
-          municipalitySelectRef.current(code);
-        }
-      });
-
-      map.on("click", "barangays-fill", (event) => {
-        const code = event.features?.[0]?.properties?.psgcCode;
-        if (typeof code === "string") {
-          barangaySelectRef.current(code);
-        }
-      });
-
-      for (const layerId of ["municipalities-fill", "barangays-fill"]) {
-        map.on("mouseenter", layerId, () => {
-          map.getCanvas().style.cursor = "pointer";
-        });
-        map.on("mouseleave", layerId, () => {
-          map.getCanvas().style.cursor = "";
-        });
-      }
-
+    const bootstrapOverlay = () => {
+      applyLabelReadabilityStyle(map);
+      addOverlayLayers(map);
       updateGeoJsonSource(map, "municipalities", municipalities);
       updateGeoJsonSource(map, "barangays", barangays);
       updateGeoJsonSource(map, "highlight", highlight);
+    };
+
+    map.on("load", () => {
+      styleReady = true;
+      bootstrapOverlay();
     });
+
+    map.on("styledata", () => {
+      if (!map.isStyleLoaded()) {
+        return;
+      }
+
+      bootstrapOverlay();
+    });
+
+    map.on("error", () => {
+      if (styleReady || usingFallbackStyle) {
+        return;
+      }
+
+      usingFallbackStyle = true;
+      setHasStyleError(true);
+      map.setStyle(FALLBACK_RASTER_STYLE);
+    });
+
+    map.on("click", "municipalities-fill", (event) => {
+      const code = event.features?.[0]?.properties?.psgcCode;
+      if (typeof code === "string") {
+        municipalitySelectRef.current(code);
+      }
+    });
+
+    map.on("click", "barangays-fill", (event) => {
+      const code = event.features?.[0]?.properties?.psgcCode;
+      if (typeof code === "string") {
+        barangaySelectRef.current(code);
+      }
+    });
+
+    for (const layerId of ["municipalities-fill", "barangays-fill"]) {
+      map.on("mouseenter", layerId, () => {
+        map.getCanvas().style.cursor = "pointer";
+      });
+      map.on("mouseleave", layerId, () => {
+        map.getCanvas().style.cursor = "";
+      });
+    }
 
     mapRef.current = map;
 
@@ -329,6 +424,11 @@ export default function MapCanvas({
   return (
     <div className="relative min-h-[52vh] overflow-hidden rounded-[32px] border border-stone-200 bg-[#eadcc6] shadow-[0_24px_60px_rgba(28,25,23,0.14)]">
       <div ref={containerRef} className="h-[calc(100vh-8rem)] min-h-[52vh] w-full" />
+      {hasStyleError ? (
+        <div className="pointer-events-none absolute left-4 top-4 rounded-xl border border-amber-200 bg-amber-50/95 px-3 py-2 text-xs font-medium text-amber-900 shadow-sm">
+          Map style could not be loaded. Using fallback map style.
+        </div>
+      ) : null}
     </div>
   );
 }
