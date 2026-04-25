@@ -4,12 +4,12 @@ type HomePageProps = {
   searchParams: Promise<{ m?: string; b?: string }>;
 };
 
-function parseMunicipalityCodes(rawValue?: string): string[] {
+function parseMunicipalityCode(rawValue?: string): string | null {
   if (!rawValue) {
-    return [];
+    return null;
   }
 
-  return Array.from(new Set(rawValue.split(",").map((code) => code.trim()).filter(Boolean)));
+  return rawValue.split(",")[0]?.trim() || null;
 }
 
 export default async function HomePage({ searchParams }: HomePageProps) {
@@ -17,7 +17,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
 
   return (
     <MapView
-      initialQueryMunicipalityCodes={parseMunicipalityCodes(params.m)}
+      initialQueryMunicipalityCode={parseMunicipalityCode(params.m)}
       initialQueryBarangayCode={params.b ?? null}
     />
   );

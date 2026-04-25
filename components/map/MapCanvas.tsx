@@ -18,16 +18,15 @@ type MapCanvasProps = {
   highlight: BoundaryFeatureCollection | null;
   focusBbox: BBox | null;
   overviewBbox: BBox | null;
-  selectedMunicipalityCodes: string[];
+  selectedMunicipalityCode: string | null;
   selectedBarangayCode: string | null;
   onMunicipalitySelect: (psgcCode: string) => void;
   onBarangaySelect: (psgcCode: string) => void;
 };
 
 const EMPTY_COLLECTION: BoundaryFeatureCollection = { type: "FeatureCollection", features: [] };
-const VECTOR_STYLE_URL = "https://demotiles.maplibre.org/style.json";
 
-const FALLBACK_RASTER_STYLE: StyleSpecification = {
+const ROAD_BASE_STYLE: StyleSpecification = {
   version: 8,
   glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
   sources: {
@@ -126,7 +125,7 @@ function addOverlayLayers(map: MapLibreMap) {
       source: "municipalities",
       paint: {
         "fill-color": "#c9b78d",
-        "fill-opacity": 0.26,
+        "fill-opacity": 0.54,
       },
     });
   }
@@ -175,7 +174,7 @@ function addOverlayLayers(map: MapLibreMap) {
       source: "barangays",
       paint: {
         "fill-color": "#f0dcc0",
-        "fill-opacity": 0.55,
+        "fill-opacity": 0.28,
       },
     });
   }
@@ -273,7 +272,7 @@ export default function MapCanvas({
   highlight,
   focusBbox,
   overviewBbox,
-  selectedMunicipalityCodes,
+  selectedMunicipalityCode,
   selectedBarangayCode,
   onMunicipalitySelect,
   onBarangaySelect,
@@ -300,15 +299,12 @@ export default function MapCanvas({
 
     const map = new maplibregl.Map({
       container: containerRef.current,
-      style: VECTOR_STYLE_URL,
+      style: ROAD_BASE_STYLE,
       center: [122.5621, 10.7202],
       zoom: 9.8,
     });
 
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
-
-    let styleReady = false;
-    let usingFallbackStyle = false;
 
     const bootstrapOverlay = () => {
       applyLabelReadabilityStyle(map);
@@ -319,7 +315,6 @@ export default function MapCanvas({
     };
 
     map.on("load", () => {
-      styleReady = true;
       bootstrapOverlay();
     });
 
@@ -332,13 +327,7 @@ export default function MapCanvas({
     });
 
     map.on("error", () => {
-      if (styleReady || usingFallbackStyle) {
-        return;
-      }
-
-      usingFallbackStyle = true;
       setHasStyleError(true);
-      map.setStyle(FALLBACK_RASTER_STYLE);
     });
 
     map.on("click", "municipalities-fill", (event) => {
@@ -405,24 +394,23 @@ export default function MapCanvas({
       return;
     }
 
-    const selectedCodesExpression =
-      selectedMunicipalityCodes.length > 0
-        ? ["in", ["get", "psgcCode"], ["literal", selectedMunicipalityCodes]]
-        : false;
+    const selectedCodeExpression = selectedMunicipalityCode
+      ? ["==", ["get", "psgcCode"], selectedMunicipalityCode]
+      : false;
 
     map.setPaintProperty("municipalities-fill", "fill-color", [
       "case",
-      selectedCodesExpression,
+      selectedCodeExpression,
       "#b8692f",
       "#c9b78d",
     ]);
     map.setPaintProperty("municipalities-fill", "fill-opacity", [
       "case",
-      selectedCodesExpression,
-      0.4,
-      0.24,
+      selectedCodeExpression,
+      0.38,
+      0.42,
     ]);
-  }, [selectedMunicipalityCodes]);
+  }, [selectedMunicipalityCode]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -439,8 +427,8 @@ export default function MapCanvas({
     map.setPaintProperty("barangays-fill", "fill-opacity", [
       "case",
       ["==", ["get", "psgcCode"], selectedBarangayCode ?? ""],
-      0.7,
-      0.48,
+      0.42,
+      0.22,
     ]);
     map.setPaintProperty("barangays-outline", "line-width", [
       "case",
@@ -488,7 +476,7 @@ export default function MapCanvas({
       <div ref={containerRef} className="h-[calc(100vh-8rem)] min-h-[52vh] w-full" />
       {hasStyleError ? (
         <div className="pointer-events-none absolute left-4 top-4 rounded-xl border border-amber-200 bg-amber-50/95 px-3 py-2 text-xs font-medium text-amber-900 shadow-sm">
-          Map style could not be loaded. Using fallback map style.
+          Some map tiles could not be loaded.
         </div>
       ) : null}
     </div>

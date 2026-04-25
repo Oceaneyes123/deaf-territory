@@ -5,12 +5,12 @@ type BarangayDetailPageProps = {
   searchParams: Promise<{ m?: string; b?: string }>;
 };
 
-function parseMunicipalityCodes(rawValue?: string): string[] {
+function parseMunicipalityCode(rawValue?: string): string | null {
   if (!rawValue) {
-    return [];
+    return null;
   }
 
-  return Array.from(new Set(rawValue.split(",").map((code) => code.trim()).filter(Boolean)));
+  return rawValue.split(",")[0]?.trim() || null;
 }
 
 export default async function BarangayDetailPage({ params, searchParams }: BarangayDetailPageProps) {
@@ -20,7 +20,7 @@ export default async function BarangayDetailPage({ params, searchParams }: Baran
   return (
     <MapView
       initialBarangayCode={psgcCode}
-      initialQueryMunicipalityCodes={parseMunicipalityCodes(query.m)}
+      initialQueryMunicipalityCode={parseMunicipalityCode(query.m)}
       initialQueryBarangayCode={query.b ?? null}
     />
   );

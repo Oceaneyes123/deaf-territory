@@ -9,9 +9,9 @@ type MunicipalityOption = {
 
 type MunicipalitySelectProps = {
   municipalities: MunicipalityOption[];
-  value: string[];
+  value: string | null;
   loading?: boolean;
-  onChange: (codes: string[]) => void;
+  onChange: (code: string | null) => void;
 };
 
 export default function MunicipalitySelect({
@@ -24,7 +24,10 @@ export default function MunicipalitySelect({
   const [searchQuery, setSearchQuery] = useState("");
   const searchInputRef = useRef<HTMLInputElement | null>(null);
 
-  const selectedSet = useMemo(() => new Set(value), [value]);
+  const selectedMunicipality = useMemo(
+    () => municipalities.find((municipality) => municipality.code === value) ?? null,
+    [municipalities, value],
+  );
 
   const filteredMunicipalities = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
@@ -44,20 +47,10 @@ export default function MunicipalitySelect({
     searchInputRef.current?.focus();
   }, [isOpen]);
 
-  function toggleMunicipality(code: string) {
-    if (selectedSet.has(code)) {
-      onChange(value.filter((currentCode) => currentCode !== code));
-      return;
-    }
-
-    onChange([...value, code]);
+  function selectMunicipality(code: string) {
+    onChange(code);
+    setIsOpen(false);
   }
-
-  function clearAllMunicipalities() {
-    onChange([]);
-  }
-
-  const selectedMunicipalities = municipalities.filter((municipality) => selectedSet.has(municipality.code));
 
   return (
     <div className="space-y-3">
@@ -79,7 +72,7 @@ export default function MunicipalitySelect({
           aria-haspopup="listbox"
           aria-expanded={isOpen}
         >
-          <span>{value.length > 0 ? `${value.length} municipality${value.length === 1 ? "" : "ies"} selected` : "Select municipalities"}</span>
+          <span>{selectedMunicipality?.name ?? "Select municipality"}</span>
           <span className="text-xs text-stone-500">{isOpen ? "Close" : "Open"}</span>
         </button>
 
@@ -101,17 +94,18 @@ export default function MunicipalitySelect({
               placeholder="Search municipalities"
               className="w-full rounded-xl border border-stone-300 px-3 py-2 text-sm text-stone-900 outline-none ring-stone-400 placeholder:text-stone-400 focus:ring-2"
             />
-            <ul role="listbox" aria-multiselectable="true" className="max-h-52 space-y-1 overflow-y-auto">
+            <ul role="listbox" className="max-h-52 space-y-1 overflow-y-auto">
               {filteredMunicipalities.map((municipality) => {
-                const isSelected = selectedSet.has(municipality.code);
+                const isSelected = value === municipality.code;
 
                 return (
                   <li key={municipality.code}>
                     <button
                       type="button"
                       disabled={loading}
-                      aria-pressed={isSelected}
-                      onClick={() => toggleMunicipality(municipality.code)}
+                      role="option"
+                      aria-selected={isSelected}
+                      onClick={() => selectMunicipality(municipality.code)}
                       className="flex w-full items-center gap-3 rounded-xl border border-transparent px-3 py-2 text-left text-sm text-stone-900 transition hover:border-stone-300 hover:bg-stone-50 disabled:cursor-not-allowed disabled:bg-stone-100"
                     >
                       <span
@@ -135,34 +129,14 @@ export default function MunicipalitySelect({
         ) : null}
       </div>
 
-      {selectedMunicipalities.length > 0 ? (
-        <div className="space-y-2">
-          <div className="flex flex-wrap gap-2">
-            {selectedMunicipalities.map((municipality) => (
-              <span
-                key={municipality.code}
-                className="inline-flex items-center gap-2 rounded-full border border-stone-300 bg-stone-50 px-3 py-1 text-xs text-stone-700"
-              >
-                <span>{municipality.name}</span>
-                <button
-                  type="button"
-                  onClick={() => toggleMunicipality(municipality.code)}
-                  className="rounded-full border border-stone-300 px-1.5 text-[11px] leading-4 text-stone-600 transition hover:border-stone-400 hover:bg-white"
-                  aria-label={`Remove ${municipality.name}`}
-                >
-                  ×
-                </button>
-              </span>
-            ))}
-          </div>
-          <button
-            type="button"
-            onClick={clearAllMunicipalities}
-            className="text-xs font-semibold uppercase tracking-[0.18em] text-stone-500 transition hover:text-stone-700"
-          >
-            Clear all municipalities
-          </button>
-        </div>
+      {selectedMunicipality ? (
+        <button
+          type="button"
+          onClick={() => onChange(null)}
+          className="text-xs font-semibold uppercase tracking-[0.18em] text-stone-500 transition hover:text-stone-700"
+        >
+          Clear municipality
+        </button>
       ) : null}
     </div>
   );
