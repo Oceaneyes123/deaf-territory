@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { usePathname, useRouter } from "next/navigation";
-import { startTransition, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { startTransition, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 
 import type { BarangayDetail, BBox, BoundaryFeatureCollection, MunicipalitySummary, SearchResult } from "@/lib/territory-types";
 import BarangayDetails from "../sidebar/BarangayDetails";
@@ -12,7 +12,7 @@ import SearchBox from "../sidebar/SearchBox";
 
 const MapCanvas = dynamic(() => import("./MapCanvas"), {
   ssr: false,
-  loading: () => <div className="min-h-[52vh] rounded-[32px] border border-stone-200 bg-[#eadcc6]" />,
+  loading: () => <div className="min-h-[58vh] rounded-2xl border border-slate-200 bg-[#edf3ed]" />,
 });
 
 type MapViewProps = {
@@ -23,11 +23,6 @@ type MapViewProps = {
 
 type DataResponse<T> = {
   data: T;
-};
-
-type BootstrapPayload = {
-  municipalities: MunicipalitySummary[];
-  municipalityGeometry: BoundaryFeatureCollection;
 };
 
 const EMPTY_COLLECTION: BoundaryFeatureCollection = { type: "FeatureCollection", features: [] };
@@ -104,7 +99,7 @@ export default function MapView({
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const debouncedSearchQuery = useDebouncedValue(deferredSearchQuery.trim(), 250);
 
-  async function ensureMunicipalityBarangays(psgcCode: string) {
+  const ensureMunicipalityBarangays = useCallback(async (psgcCode: string) => {
     if (loadedMunicipalityCode === psgcCode && barangayGeometry) {
       return barangayGeometry;
     }
@@ -125,9 +120,9 @@ export default function MapView({
       setLoadedMunicipalityCode(psgcCode);
     });
     return geometry;
-  }
+  }, [barangayGeometry, loadedMunicipalityCode]);
 
-  async function selectBarangay(psgcCode: string) {
+  const selectBarangay = useCallback(async (psgcCode: string) => {
     const requestId = ++selectionRequestRef.current;
     setSelectionError(null);
     setIsBarangayLoading(true);
@@ -167,9 +162,9 @@ export default function MapView({
         setIsBarangayLoading(false);
       }
     }
-  }
+  }, [ensureMunicipalityBarangays]);
 
-  async function handleMunicipalitySelectionChange(nextCode: string | null) {
+  const handleMunicipalitySelectionChange = useCallback(async (nextCode: string | null) => {
     selectionRequestRef.current += 1;
     setSelectionError(null);
 
@@ -202,7 +197,7 @@ export default function MapView({
     } finally {
       setIsMunicipalityLoading(false);
     }
-  }
+  }, [barangayGeometry, ensureMunicipalityBarangays, loadedMunicipalityCode, selectedBarangay]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -212,12 +207,32 @@ export default function MapView({
       setBootError(null);
 
       try {
-        const response = await fetchJson<DataResponse<BootstrapPayload>>("/api/bootstrap", controller.signal);
+        const municipalitiesPromise = fetchJson<DataResponse<MunicipalitySummary[]>>(
+          "/api/municipalities",
+          controller.signal,
+        );
+        const municipalityGeometryPromise = fetchJson<BoundaryFeatureCollection>(
+          "/api/municipalities/geometry",
+          controller.signal,
+        );
+
+        const municipalityResponse = await municipalitiesPromise;
 
         startTransition(() => {
-          setMunicipalities(response.data.municipalities);
-          setMunicipalityGeometry(response.data.municipalityGeometry);
+          setMunicipalities(municipalityResponse.data);
         });
+
+        municipalityGeometryPromise
+          .then((geometry) => {
+            if (!controller.signal.aborted) {
+              startTransition(() => setMunicipalityGeometry(geometry));
+            }
+          })
+          .catch((error) => {
+            if (!controller.signal.aborted) {
+              setBootError(error instanceof Error ? error.message : "Unable to load Iloilo map data.");
+            }
+          });
       } catch (error) {
         if (!controller.signal.aborted) {
           setBootError(error instanceof Error ? error.message : "Unable to load Iloilo map data.");
@@ -235,7 +250,7 @@ export default function MapView({
   }, []);
 
   useEffect(() => {
-    if (isBootLoading || !municipalityGeometry || hasHydratedQueryRef.current) {
+    if (isBootLoading || municipalities.length === 0 || hasHydratedQueryRef.current) {
       return;
     }
 
@@ -424,6 +439,17 @@ export default function MapView({
     return "Select a municipality or search a barangay to begin.";
   }, [debouncedSearchQuery.length, selectedMunicipalityCode]);
 
+  const activePlaceLabel = selectedBarangay
+    ? selectedBarangay.displayName
+    : selectedMunicipalityFeature
+      ? `${selectedMunicipalityFeature.properties.name}, Iloilo`
+      : "Province of Iloilo";
+  const activeSubtitle = selectedBarangay
+    ? `PSGC ${selectedBarangay.psgcCode}`
+    : selectedMunicipalityFeature
+      ? "Municipality boundary selected"
+      : "Search or choose a municipality to focus the map";
+
   async function handleCopyContextLink() {
     try {
       await navigator.clipboard.writeText(window.location.href);
@@ -434,23 +460,32 @@ export default function MapView({
   }
 
   return (
-    <div className="grid min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(245,201,120,0.18),_transparent_30%),linear-gradient(180deg,#f8f2e8_0%,#f3eee5_100%)] md:grid-cols-[390px_1fr]">
-      <aside className="flex min-h-screen flex-col gap-6 border-b border-stone-200/70 px-5 py-6 md:border-b-0 md:border-r md:px-7">
-        <div className="space-y-4">
-          <div className="inline-flex rounded-full border border-stone-300 bg-white/75 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.28em] text-stone-500 backdrop-blur">
-            Deaf Territory
+    <div className="grid min-h-screen bg-[#f6f7f4] text-slate-950 lg:grid-cols-[360px_1fr]">
+      <aside className="flex min-h-0 flex-col gap-4 border-b border-slate-200 bg-white px-4 py-4 lg:h-screen lg:border-b-0 lg:border-r lg:px-5">
+        <div className="space-y-3">
+          <div className="flex items-center gap-3">
+            <span aria-hidden="true" className="flex h-10 w-10 items-center justify-center rounded-xl bg-teal-800 text-sm font-black text-white">
+              DT
+            </span>
+            <div>
+              <p className="text-sm font-black text-slate-950">Deaf Territory</p>
+              <p className="text-xs font-medium text-slate-500">Iloilo boundary lookup</p>
+            </div>
           </div>
-          <h1 className="max-w-sm text-4xl font-semibold leading-tight text-stone-950">Iloilo</h1>
+          <h1 className="text-2xl font-black leading-tight text-slate-950">Iloilo Territory Map</h1>
+          <p className="text-sm leading-6 text-slate-600">
+            Find barangay boundaries, inspect PSGC details, and share the active map context.
+          </p>
         </div>
 
-        <div className="space-y-4 rounded-[28px] border border-stone-200 bg-white/80 p-5 shadow-[0_18px_40px_rgba(41,37,36,0.08)] backdrop-blur">
+        <div className="space-y-4 border-y border-slate-200 py-4">
           <SearchBox
             value={searchQuery}
             onChange={(value) => {
               setSearchError(null);
               setSearchQuery(value);
             }}
-            placeholder="Search"
+            placeholder="Search barangay"
           />
           <MunicipalitySelect
             municipalities={municipalityOptions}
@@ -463,7 +498,7 @@ export default function MapView({
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              className="rounded-full border border-stone-300 px-4 py-2 text-sm text-stone-700 transition hover:border-stone-400 hover:bg-stone-50"
+              className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-bold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
               onClick={() => {
                 selectionRequestRef.current += 1;
                 startTransition(() => {
@@ -484,15 +519,15 @@ export default function MapView({
         </div>
 
         {bootError ? (
-          <div className="rounded-[24px] border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{bootError}</div>
+          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">{bootError}</div>
         ) : null}
         {selectionError ? (
-          <div className="rounded-[24px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
             {selectionError}
           </div>
         ) : null}
         {searchError ? (
-          <div className="rounded-[24px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
             {searchError}
           </div>
         ) : null}
@@ -518,15 +553,34 @@ export default function MapView({
         />
       </aside>
 
-      <section className="flex min-h-screen flex-col px-5 py-6 md:px-6">
-        <div className="mb-4 rounded-[28px] border border-stone-200 bg-white/70 px-5 py-4 shadow-[0_18px_40px_rgba(41,37,36,0.06)] backdrop-blur">
-          <p className="text-lg font-medium text-stone-900">
-            {selectedBarangay
-              ? selectedBarangay.displayName
-              : selectedMunicipalityFeature
-                ? `${selectedMunicipalityFeature.properties.name}, Iloilo`
-                : "Iloilo"}
-          </p>
+      <section className="flex min-h-screen flex-col px-4 py-4 lg:px-5">
+        <div className="mb-3 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Current focus</p>
+            <p className="mt-1 text-lg font-black leading-tight text-slate-950">{activePlaceLabel}</p>
+            <p className="text-sm font-medium text-slate-500">{activeSubtitle}</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                void handleCopyContextLink();
+              }}
+              className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-bold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+            >
+              {copyState === "copied" ? "Link copied" : "Copy link"}
+            </button>
+            {selectedBarangay ? (
+              <a
+                href={`https://www.openstreetmap.org/?mlat=${selectedBarangay.centroid[1]}&mlon=${selectedBarangay.centroid[0]}#map=15/${selectedBarangay.centroid[1]}/${selectedBarangay.centroid[0]}`}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-lg bg-teal-800 px-3 py-2 text-sm font-bold text-white transition hover:bg-teal-700"
+              >
+                Open in OSM
+              </a>
+            ) : null}
+          </div>
         </div>
 
         <MapCanvas

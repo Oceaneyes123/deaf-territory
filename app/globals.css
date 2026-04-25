@@ -4,8 +4,8 @@
 
 :root {
   color-scheme: light;
-  --background: #f7f0e6;
-  --foreground: #1c1917;
+  --background: #f6f7f4;
+  --foreground: #151a18;
 }
 
 html {
@@ -27,17 +27,24 @@ h3,
 h4,
 h5,
 h6 {
-  font-family: var(--font-display), serif;
-  letter-spacing: -0.025em;
+  font-family: var(--font-body), sans-serif;
+  letter-spacing: 0;
 }
 
 ::selection {
-  background: rgba(180, 105, 47, 0.22);
+  background: rgba(33, 118, 104, 0.18);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(74, 85, 80, 0.35) transparent;
 }
 
 .maplibregl-ctrl-group {
-  border: 1px solid rgba(41, 37, 36, 0.14);
-  box-shadow: 0 10px 24px rgba(41, 37, 36, 0.12);
+  overflow: hidden;
+  border: 1px solid rgba(42, 52, 48, 0.16);
+  border-radius: 12px;
+  box-shadow: 0 12px 28px rgba(21, 26, 24, 0.12);
 }
 
 .maplibregl-canvas {

@@ -124,8 +124,8 @@ function addOverlayLayers(map: MapLibreMap) {
       type: "fill",
       source: "municipalities",
       paint: {
-        "fill-color": "#c9b78d",
-        "fill-opacity": 0.54,
+        "fill-color": "#7fa99b",
+        "fill-opacity": 0.42,
       },
     });
   }
@@ -136,9 +136,9 @@ function addOverlayLayers(map: MapLibreMap) {
       type: "line",
       source: "municipalities",
       paint: {
-        "line-color": "#534338",
-        "line-width": 1.4,
-        "line-opacity": 0.72,
+        "line-color": "#2f5d55",
+        "line-width": 1.3,
+        "line-opacity": 0.78,
       },
     });
   }
@@ -158,8 +158,8 @@ function addOverlayLayers(map: MapLibreMap) {
         "text-ignore-placement": false,
       },
       paint: {
-        "text-color": "#3f2f22",
-        "text-halo-color": "#f6edcf",
+        "text-color": "#213f3a",
+        "text-halo-color": "#f4f7f2",
         "text-halo-width": 1.6,
         "text-halo-blur": 0.4,
         "text-opacity": ["interpolate", ["linear"], ["zoom"], 8, 0.86, 11, 0.72, 12.5, 0],
@@ -173,8 +173,8 @@ function addOverlayLayers(map: MapLibreMap) {
       type: "fill",
       source: "barangays",
       paint: {
-        "fill-color": "#f0dcc0",
-        "fill-opacity": 0.28,
+        "fill-color": "#d9eadf",
+        "fill-opacity": 0.26,
       },
     });
   }
@@ -185,7 +185,7 @@ function addOverlayLayers(map: MapLibreMap) {
       type: "line",
       source: "barangays",
       paint: {
-        "line-color": "#8b5e3c",
+        "line-color": "#4f7f74",
         "line-width": 1,
         "line-opacity": 0.85,
       },
@@ -207,8 +207,8 @@ function addOverlayLayers(map: MapLibreMap) {
         "text-ignore-placement": false,
       },
       paint: {
-        "text-color": "#4b3325",
-        "text-halo-color": "#fff3dc",
+        "text-color": "#24413c",
+        "text-halo-color": "#f8faf6",
         "text-halo-width": 1.4,
         "text-halo-blur": 0.35,
       },
@@ -221,9 +221,9 @@ function addOverlayLayers(map: MapLibreMap) {
       type: "line",
       source: "highlight",
       paint: {
-        "line-color": "#8f1d1d",
-        "line-width": 3,
-        "line-dasharray": [1.2, 1],
+        "line-color": "#d97706",
+        "line-width": 3.4,
+        "line-dasharray": [1.2, 0.8],
       },
     });
   }
@@ -280,9 +280,18 @@ export default function MapCanvas({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const lastViewportKeyRef = useRef<string | null>(null);
+  const municipalitiesRef = useRef(municipalities);
+  const barangaysRef = useRef(barangays);
+  const highlightRef = useRef(highlight);
   const municipalitySelectRef = useRef(onMunicipalitySelect);
   const barangaySelectRef = useRef(onBarangaySelect);
   const [hasStyleError, setHasStyleError] = useState(false);
+
+  useEffect(() => {
+    municipalitiesRef.current = municipalities;
+    barangaysRef.current = barangays;
+    highlightRef.current = highlight;
+  });
 
   useEffect(() => {
     municipalitySelectRef.current = onMunicipalitySelect;
@@ -302,16 +311,18 @@ export default function MapCanvas({
       style: ROAD_BASE_STYLE,
       center: [122.5621, 10.7202],
       zoom: 9.8,
+      attributionControl: false,
     });
 
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
+    map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-right");
 
     const bootstrapOverlay = () => {
       applyLabelReadabilityStyle(map);
       addOverlayLayers(map);
-      updateGeoJsonSource(map, "municipalities", municipalities);
-      updateGeoJsonSource(map, "barangays", barangays);
-      updateGeoJsonSource(map, "highlight", highlight);
+      updateGeoJsonSource(map, "municipalities", municipalitiesRef.current);
+      updateGeoJsonSource(map, "barangays", barangaysRef.current);
+      updateGeoJsonSource(map, "highlight", highlightRef.current);
     };
 
     map.on("load", () => {
@@ -359,7 +370,7 @@ export default function MapCanvas({
       map.remove();
       mapRef.current = null;
     };
-  }, [barangays, highlight, municipalities]);
+  }, []);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -401,8 +412,8 @@ export default function MapCanvas({
     map.setPaintProperty("municipalities-fill", "fill-color", [
       "case",
       selectedCodeExpression,
-      "#b8692f",
-      "#c9b78d",
+      "#d97706",
+      "#7fa99b",
     ]);
     map.setPaintProperty("municipalities-fill", "fill-opacity", [
       "case",
@@ -421,8 +432,8 @@ export default function MapCanvas({
     map.setPaintProperty("barangays-fill", "fill-color", [
       "case",
       ["==", ["get", "psgcCode"], selectedBarangayCode ?? ""],
-      "#b64033",
-      "#f0dcc0",
+      "#d97706",
+      "#d9eadf",
     ]);
     map.setPaintProperty("barangays-fill", "fill-opacity", [
       "case",
@@ -472,10 +483,10 @@ export default function MapCanvas({
   }, [focusBbox, overviewBbox]);
 
   return (
-    <div className="relative min-h-[52vh] overflow-hidden rounded-[32px] border border-stone-200 bg-[#eadcc6] shadow-[0_24px_60px_rgba(28,25,23,0.14)]">
-      <div ref={containerRef} className="h-[calc(100vh-8rem)] min-h-[52vh] w-full" />
+    <div className="relative min-h-[58vh] overflow-hidden rounded-2xl border border-slate-200 bg-[#edf3ed] shadow-[0_18px_50px_rgba(15,23,20,0.12)]">
+      <div ref={containerRef} className="h-[calc(100vh-7rem)] min-h-[58vh] w-full" />
       {hasStyleError ? (
-        <div className="pointer-events-none absolute left-4 top-4 rounded-xl border border-amber-200 bg-amber-50/95 px-3 py-2 text-xs font-medium text-amber-900 shadow-sm">
+        <div className="pointer-events-none absolute left-4 top-4 rounded-xl border border-amber-200 bg-amber-50/95 px-3 py-2 text-xs font-bold text-amber-900 shadow-sm">
           Some map tiles could not be loaded.
         </div>
       ) : null}

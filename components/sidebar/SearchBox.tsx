@@ -8,16 +8,15 @@ type SearchBoxProps = {
 
 export default function SearchBox({ value, onChange, placeholder = "Search" }: SearchBoxProps) {
   return (
-    <label className="block">
-      <span className="sr-only">Search</span>
+    <label className="block space-y-2">
+      <span className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Search barangay</span>
       <input
         type="search"
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
-        className="h-12 w-full rounded-2xl border border-stone-300 bg-white/90 px-4 text-sm text-stone-900 outline-none transition focus:border-amber-700 focus:ring-2 focus:ring-amber-200"
+        className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-teal-700 focus:ring-4 focus:ring-teal-700/10"
       />
-      <span className="mt-2 block text-xs text-stone-500">Type at least 2 characters.</span>
     </label>
   );
 }

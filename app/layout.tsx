@@ -1,16 +1,12 @@
 import type { Metadata } from "next";
-import { Fraunces, Manrope } from "next/font/google";
+import { Manrope } from "next/font/google";
 
 import "./globals.css";
-
-const displayFont = Fraunces({
-  subsets: ["latin"],
-  variable: "--font-display",
-});
 
 const bodyFont = Manrope({
   subsets: ["latin"],
   variable: "--font-body",
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -21,7 +17,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className={`${displayFont.variable} ${bodyFont.variable}`}>{children}</body>
+      <body className={bodyFont.variable}>{children}</body>
     </html>
   );
 }
