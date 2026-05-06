@@ -99,26 +99,32 @@ export default function MapView({
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const debouncedSearchQuery = useDebouncedValue(deferredSearchQuery.trim(), 250);
 
-  const ensureMunicipalityBarangays = useCallback(async (psgcCode: string) => {
+  const ensureMunicipalityBarangays = useCallback(async (psgcCode: string, requestId?: number) => {
+    const isCurrentRequest = () => requestId === undefined || requestId === selectionRequestRef.current;
+
     if (loadedMunicipalityCode === psgcCode && barangayGeometry) {
       return barangayGeometry;
     }
 
     const cachedGeometry = barangayGeometryCacheRef.current.get(psgcCode);
     if (cachedGeometry) {
-      startTransition(() => {
-        setBarangayGeometry(cachedGeometry);
-        setLoadedMunicipalityCode(psgcCode);
-      });
+      if (isCurrentRequest()) {
+        startTransition(() => {
+          setBarangayGeometry(cachedGeometry);
+          setLoadedMunicipalityCode(psgcCode);
+        });
+      }
       return cachedGeometry;
     }
 
     const geometry = await fetchJson<BoundaryFeatureCollection>(`/api/barangays?municipality=${psgcCode}`);
     barangayGeometryCacheRef.current.set(psgcCode, geometry);
-    startTransition(() => {
-      setBarangayGeometry(geometry);
-      setLoadedMunicipalityCode(psgcCode);
-    });
+    if (isCurrentRequest()) {
+      startTransition(() => {
+        setBarangayGeometry(geometry);
+        setLoadedMunicipalityCode(psgcCode);
+      });
+    }
     return geometry;
   }, [barangayGeometry, loadedMunicipalityCode]);
 
@@ -141,7 +147,7 @@ export default function MapView({
         return;
       }
 
-      await ensureMunicipalityBarangays(detail.municipalityPsgcCode);
+      await ensureMunicipalityBarangays(detail.municipalityPsgcCode, requestId);
       if (requestId !== selectionRequestRef.current) {
         return;
       }
@@ -165,16 +171,13 @@ export default function MapView({
   }, [ensureMunicipalityBarangays]);
 
   const handleMunicipalitySelectionChange = useCallback(async (nextCode: string | null) => {
-    selectionRequestRef.current += 1;
+    const requestId = ++selectionRequestRef.current;
     setSelectionError(null);
 
     startTransition(() => {
       setSelectedMunicipalityCode(nextCode);
-
-      if (!nextCode || (selectedBarangay && selectedBarangay.municipalityPsgcCode !== nextCode)) {
-        setSelectedBarangayCode(null);
-        setSelectedBarangay(null);
-      }
+      setSelectedBarangayCode(null);
+      setSelectedBarangay(null);
     });
 
     if (!nextCode) {
@@ -191,13 +194,17 @@ export default function MapView({
 
     setIsMunicipalityLoading(true);
     try {
-      await ensureMunicipalityBarangays(nextCode);
+      await ensureMunicipalityBarangays(nextCode, requestId);
     } catch (error) {
-      setSelectionError(error instanceof Error ? error.message : "Unable to load municipality barangays.");
+      if (requestId === selectionRequestRef.current) {
+        setSelectionError(error instanceof Error ? error.message : "Unable to load municipality barangays.");
+      }
     } finally {
-      setIsMunicipalityLoading(false);
+      if (requestId === selectionRequestRef.current) {
+        setIsMunicipalityLoading(false);
+      }
     }
-  }, [barangayGeometry, ensureMunicipalityBarangays, loadedMunicipalityCode, selectedBarangay]);
+  }, [barangayGeometry, ensureMunicipalityBarangays, loadedMunicipalityCode]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -419,12 +426,8 @@ export default function MapView({
       };
     }
 
-    if (selectedMunicipalityFeature) {
-      return { type: "FeatureCollection", features: [selectedMunicipalityFeature] };
-    }
-
     return null;
-  }, [selectedBarangay, selectedMunicipalityFeature]);
+  }, [selectedBarangay]);
 
   const focusBbox = selectedBarangay?.bbox ?? selectedMunicipalityFeature?.properties.bbox ?? null;
   const emptyMessage = useMemo(() => {

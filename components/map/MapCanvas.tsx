@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { FeatureCollection } from "geojson";
 import maplibregl, {
   type GeoJSONSource,
@@ -118,6 +118,13 @@ function addOverlayLayers(map: MapLibreMap) {
     });
   }
 
+  if (!map.getSource("municipality-highlight")) {
+    map.addSource("municipality-highlight", {
+      type: "geojson",
+      data: EMPTY_COLLECTION as FeatureCollection,
+    });
+  }
+
   if (!map.getLayer("municipalities-fill")) {
     map.addLayer({
       id: "municipalities-fill",
@@ -215,6 +222,19 @@ function addOverlayLayers(map: MapLibreMap) {
     });
   }
 
+  if (!map.getLayer("municipality-highlight-outline")) {
+    map.addLayer({
+      id: "municipality-highlight-outline",
+      type: "line",
+      source: "municipality-highlight",
+      paint: {
+        "line-color": "#d97706",
+        "line-width": 3.6,
+        "line-opacity": 0.96,
+      },
+    });
+  }
+
   if (!map.getLayer("highlight-outline")) {
     map.addLayer({
       id: "highlight-outline",
@@ -236,6 +256,21 @@ function updateGeoJsonSource(map: MapLibreMap, sourceId: string, data: BoundaryF
   }
 
   source.setData((data ?? EMPTY_COLLECTION) as FeatureCollection);
+}
+
+function getSelectedMunicipalityHighlight(
+  municipalities: BoundaryFeatureCollection | null,
+  selectedMunicipalityCode: string | null,
+): BoundaryFeatureCollection | null {
+  if (!municipalities || !selectedMunicipalityCode) {
+    return null;
+  }
+
+  const selectedFeature = municipalities.features.find(
+    (feature) => feature.properties.psgcCode === selectedMunicipalityCode,
+  );
+
+  return selectedFeature ? { type: "FeatureCollection", features: [selectedFeature] } : null;
 }
 
 function toBounds(bbox: BBox): LngLatBoundsLike {
@@ -280,9 +315,14 @@ export default function MapCanvas({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const lastViewportKeyRef = useRef<string | null>(null);
+  const selectedMunicipalityHighlight = useMemo(
+    () => getSelectedMunicipalityHighlight(municipalities, selectedMunicipalityCode),
+    [municipalities, selectedMunicipalityCode],
+  );
   const municipalitiesRef = useRef(municipalities);
   const barangaysRef = useRef(barangays);
   const highlightRef = useRef(highlight);
+  const selectedMunicipalityHighlightRef = useRef(selectedMunicipalityHighlight);
   const municipalitySelectRef = useRef(onMunicipalitySelect);
   const barangaySelectRef = useRef(onBarangaySelect);
   const [hasStyleError, setHasStyleError] = useState(false);
@@ -291,6 +331,7 @@ export default function MapCanvas({
     municipalitiesRef.current = municipalities;
     barangaysRef.current = barangays;
     highlightRef.current = highlight;
+    selectedMunicipalityHighlightRef.current = selectedMunicipalityHighlight;
   });
 
   useEffect(() => {
@@ -322,6 +363,7 @@ export default function MapCanvas({
       addOverlayLayers(map);
       updateGeoJsonSource(map, "municipalities", municipalitiesRef.current);
       updateGeoJsonSource(map, "barangays", barangaysRef.current);
+      updateGeoJsonSource(map, "municipality-highlight", selectedMunicipalityHighlightRef.current);
       updateGeoJsonSource(map, "highlight", highlightRef.current);
     };
 
@@ -405,23 +447,13 @@ export default function MapCanvas({
       return;
     }
 
-    const selectedCodeExpression = selectedMunicipalityCode
-      ? ["==", ["get", "psgcCode"], selectedMunicipalityCode]
-      : false;
-
-    map.setPaintProperty("municipalities-fill", "fill-color", [
-      "case",
-      selectedCodeExpression,
-      "#d97706",
-      "#7fa99b",
-    ]);
-    map.setPaintProperty("municipalities-fill", "fill-opacity", [
-      "case",
-      selectedCodeExpression,
-      0.38,
-      0.42,
-    ]);
-  }, [selectedMunicipalityCode]);
+    map.setPaintProperty("municipalities-fill", "fill-color", "#7fa99b");
+    map.setPaintProperty("municipalities-fill", "fill-opacity", 0.42);
+    map.setPaintProperty("municipalities-outline", "line-color", "#2f5d55");
+    map.setPaintProperty("municipalities-outline", "line-width", 1.3);
+    map.setPaintProperty("municipalities-outline", "line-opacity", 0.78);
+    updateGeoJsonSource(map, "municipality-highlight", selectedMunicipalityHighlight);
+  }, [selectedMunicipalityHighlight]);
 
   useEffect(() => {
     const map = mapRef.current;
