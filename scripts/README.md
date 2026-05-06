@@ -7,3 +7,5 @@ Database preparation now follows one canonical flow:
 - `npm run db:build-search-index` materializes canonical `municipalities` and `barangays`
 - `npm run db:validate-data` runs the required geometry and count checks
 - `npm run db:prepare` runs the full sequence end to end
+- `npm run db:export` creates a portable `pg_dump` export under `database-exports/`
+- `npm run db:restore` restores a dump into a target PostgreSQL database

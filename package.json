@@ -16,7 +16,9 @@
     "db:import-boundaries": "tsx scripts/import-boundaries.ts",
     "db:build-search-index": "tsx scripts/build-search-index.ts",
     "db:validate-data": "tsx scripts/validate-data.ts",
-    "db:prepare": "npm run db:import-psgc && npm run db:import-boundaries && npm run db:build-search-index && npm run db:validate-data"
+    "db:prepare": "npm run db:import-psgc && npm run db:import-boundaries && npm run db:build-search-index && npm run db:validate-data",
+    "db:export": "tsx scripts/export-database.ts",
+    "db:restore": "tsx scripts/restore-database.ts"
   },
   "dependencies": {
     "maplibre-gl": "^5.6.2",
